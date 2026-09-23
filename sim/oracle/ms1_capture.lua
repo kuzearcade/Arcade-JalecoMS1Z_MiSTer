@@ -1,0 +1,305 @@
+-- MAME oracle capture for Mega System 1 -- carried over from
+-- Arcade-JalecoMS1BCD_MiSTer with a type-Z map added (lomakai, makaiden).
+--
+--   MS1_OUT=<dir> MS1_FRAMES=<n> [MS1_PIX=1] [MS1_STATE=1] \
+--     mame <set> -rompath mame_roms -video none -sound none -nothrottle \
+--          -autoboot_script sim/oracle/ms1_capture.lua
+--
+-- Modelled on Arcade-SandScrp_MiSTer's sandscrp_capture.lua. Everything is
+-- keyed by the capture's own frame counter F, so a frame's pixels and the
+-- state that produced them can never drift apart.
+--
+-- THREE things here are specific to this board and each of them is a trap
+-- docs/PLAN.md calls out by name:
+--
+-- 1. The memory map is MODE-DEPENDENT, and System D inverts the layer
+--    ADDRESSES against the layer INDICES: MAME's m_tmap[0] VRAM is at
+--    0E8000 and m_tmap[1] at 0D0000, the opposite of System C, while their
+--    scroll REGISTERS stay in tmap-index order at 0C2000/0C2008. The map
+--    below is written in m_tmap[] index order for both, so a consumer that
+--    walks it by index is right in all three modes.
+--
+-- 2. SPRITES ARE TWO FRAMES AHEAD. megasys1_v.cpp screen_vblank does
+--        buffer2 <- buffer ;  buffer <- live
+--    every vblank, and draw_sprites reads buffer2. So the sprites in frame F
+--    came from the object/sprite RAM that was live at frame F-2. This script
+--    captures LIVE ram each frame; the consumer must use frame F-2's objram
+--    and spriteram when reproducing frame F. Recorded in layout.txt so the
+--    rule travels with the data.
+--
+-- 3. Several video registers are WRITE-ONLY (active_layers, screen_flag,
+--    sprite_bank). Reading the register window through the CPU's program
+--    space would return nothing for those AND would fire real read handlers
+--    on everything else in range. Registers are therefore captured with
+--    WRITE TAPS into a shadow table, which is side-effect free and exact.
+--    Only plain RAM is read with read_u16.
+--
+-- Outputs:
+--   frames/f<F>.raw  pixels of frame F, host-endian xRGB (256x224x4 bytes)
+--   state/s<F>.bin   the RAM regions listed in layout.txt, each u16 LE
+--   state/r<F>.txt   the register shadow at frame F, "name value" per line
+--   layout.txt       region list, sizes, file offsets, and the F-2 rule
+--   index.txt        F -> frame_number, machine time
+
+local out    = os.getenv('MS1_OUT')    or 'sim/oracle/traces/ms1'
+local frames = tonumber(os.getenv('MS1_FRAMES') or '120')
+local do_pix = os.getenv('MS1_PIX')   == '1'
+local do_st  = os.getenv('MS1_STATE') == '1'
+-- MS1_SKIP: run this many frames before dumping anything, so deep attract
+-- (the demo play, where the sprites are) is reachable without writing
+-- thousands of files. F still counts from 0 at the first DUMPED frame, so
+-- the F-1 register rule and the F-2 sprite rule stay valid within a run.
+local skip   = tonumber(os.getenv('MS1_SKIP') or '0')
+-- MS1_SCAN: write nothing but one line of register state per frame, into a
+-- single scan.txt. Used to answer "which game, and which frame, ever sets
+-- the sprite-split bit / the flip bit / a non-default page layout?" across
+-- all sixteen sets without writing 67 KB of VRAM per frame to find out.
+local scan   = os.getenv('MS1_SCAN') == '1'
+local warm   = 0
+
+local MODE = {
+  avspirit='B', monkelf='B', edf='B', edfa='B', edfb='B', edfu='B', hayaosi1='B',
+  ['64street']='C', ['64streetj']='C', ['64streetja']='C',
+  bigstrik='C', chimerab='C', chimeraba='C', cybattlr='C',
+  peekaboo='D', peekaboou='D',
+  lomakai='Z', makaiden='Z',
+}
+
+-- Per mode: RAM regions (plain memory, safe to read) and the register file.
+-- layers[] is in m_tmap[] INDEX order. wram is the work-RAM base; sprite RAM
+-- is always wram + 0x8000, 0x2000 bytes (megasys1_v.cpp: &m_ram[0x8000/2]).
+local MAP = {
+  B = { palette=0x048000, objram=0x04E000, wram=0x060000,
+        layers={0x050000, 0x054000, 0x058000},
+        regs={ {0x044000,'active_layers'}, {0x044100,'sprite_flag'},
+               {0x044300,'screen_flag'},
+               {0x044200,'t0_sx'}, {0x044202,'t0_sy'}, {0x044204,'t0_ctrl'},
+               {0x044208,'t1_sx'}, {0x04420A,'t1_sy'}, {0x04420C,'t1_ctrl'},
+               {0x044008,'t2_sx'}, {0x04400A,'t2_sy'}, {0x04400C,'t2_ctrl'} },
+        tapwin={0x044000,0x0443FF} },
+  C = { palette=0x0F8000, objram=0x0D2000, wram=0x1C0000,
+        layers={0x0E0000, 0x0E8000, 0x0F0000},
+        regs={ {0x0C2208,'active_layers'}, {0x0C2200,'sprite_flag'},
+               {0x0C2308,'screen_flag'},   {0x0C2108,'sprite_bank'},
+               {0x0C2000,'t0_sx'}, {0x0C2002,'t0_sy'}, {0x0C2004,'t0_ctrl'},
+               {0x0C2008,'t1_sx'}, {0x0C200A,'t1_sy'}, {0x0C200C,'t1_ctrl'},
+               {0x0C2100,'t2_sx'}, {0x0C2102,'t2_sy'}, {0x0C2104,'t2_ctrl'} },
+        tapwin={0x0C2000,0x0C23FF} },
+  -- D: two layers. Note the VRAM inversion -- index 0 is the HIGHER address.
+  D = { palette=0x0D8000, objram=0x0CA000, wram=0x1F0000,
+        layers={0x0E8000, 0x0D0000},
+        regs={ {0x0C2208,'active_layers'}, {0x0C2200,'sprite_flag'},
+               {0x0C2308,'screen_flag'},
+               {0x0C2000,'t0_sx'}, {0x0C2002,'t0_sy'}, {0x0C2004,'t0_ctrl'},
+               {0x0C2008,'t1_sx'}, {0x0C200A,'t1_sy'}, {0x0C200C,'t1_ctrl'} },
+        tapwin={0x0C2000,0x0C23FF} },
+  -- Z: megasys_base_map. Two layers in index order, no active_layers /
+  -- sprite_flag registers. Sprites are drawn from LIVE work RAM + 0x8000 at
+  -- each (partial) screen update -- not two frames behind as on B/C/D.
+  Z = { palette=0x088000, objram=0x08C000, wram=0x0F0000,
+        layers={0x090000, 0x094000},
+        regs={ {0x084300,'screen_flag'},
+               {0x084200,'t0_sx'}, {0x084202,'t0_sy'}, {0x084204,'t0_ctrl'},
+               {0x084208,'t1_sx'}, {0x08420A,'t1_sy'}, {0x08420C,'t1_ctrl'} },
+        tapwin={0x084000,0x0843FF} },
+}
+
+local setname = emu.romname()
+local mode = MODE[setname]
+if not mode then
+  print(('ms1_capture: %s is not a B/C/D set; nothing to capture'):format(setname))
+  return
+end
+local m = MAP[mode]
+
+local cpu = manager.machine.devices[':maincpu']
+local mem = cpu.spaces['program']
+local scr = manager.machine.screens:at(1)
+
+os.execute(('mkdir -p %q %q'):format(out..'/frames', out..'/state'))
+
+-- MAME 0.289's Lua binds no screen:vpos(). Calling it raises an error, and
+-- an error inside a memory tap is swallowed silently: the tap just stops at
+-- that line. The scanline is therefore derived from the time left until
+-- vblank starts (line VBSTART), one scan period per line. VBSTART and the
+-- line count are the screen's own: 240 of 278 on B/C/D, 240 of 256 on Z.
+local function vpos_now()
+  local t = scr:time_until_vblank_start()
+  if type(t) ~= 'number' then t = t:as_double() end
+  local total = math.floor(scr.frame_period / scr.scan_period + 0.5)
+  local lines_left = math.floor(t / scr.scan_period + 0.5)
+  return (240 - lines_left) % total
+end
+
+-- RAM regions, in the order they are written to s<F>.bin.
+local regions = { {'palette', m.palette, 0x0800},
+                  {'objram',  m.objram,  0x2000},
+                  {'spriteram', m.wram + 0x8000, 0x2000} }
+for i, base in ipairs(m.layers) do
+  regions[#regions+1] = {('layer%d'):format(i-1), base, 0x4000}
+end
+
+-- Register shadow, filled by write taps.
+local shadow = {}
+local byaddr = {}
+for _, r in ipairs(m.regs) do shadow[r[2]] = 0; byaddr[r[1]] = r[2] end
+
+-- NB: install_write_tap returns a memory_passthrough_handler that must be
+-- kept alive. Let it go out of scope and Lua collects it, the tap is silently
+-- removed, and every register reads back 0 forever -- which is exactly what
+-- happened on the first attempt (docs/known-issues.md MS1-10). Hence TAP.
+-- Count register writes that land while the beam is inside the visible area.
+-- scroll_w calls screen->update_partial(vpos()-1), so a mid-frame write makes
+-- MAME render the top of the frame with the old value and the bottom with the
+-- new one. A single end-of-frame snapshot cannot reproduce such a frame, and
+-- the consumer needs to know which frames those are rather than guessing.
+local midframe = 0
+local midframe_last = -1   -- raster line of the LAST visible-area register write
+TAP = mem:install_write_tap(m.tapwin[1], m.tapwin[2], 'ms1regs', function(offset, data, mask)
+  local name = byaddr[offset]
+  if name then
+    shadow[name] = data & 0xFFFF
+    local v = vpos_now()
+    if v >= 16 and v < 240 then
+      midframe = midframe + 1
+      if v > midframe_last then midframe_last = v end
+    end
+  end
+  return data
+end)
+
+-- MS1_SPRTAP=1: for every frame, the scanlines on which the program wrote
+-- Sprite Data (work RAM + 0x8000..0x87FF). On type Z MAME draws sprites from
+-- live RAM at each partial update, so WHEN the game writes the list decides
+-- which list a frame shows -- the core's SPR_SNAP_LINE is chosen from this.
+local sprtap_f = (os.getenv('MS1_SPRTAP') == '1') and io.open(out..'/sprtap.txt', 'w') or nil
+local sprlines = {}
+if sprtap_f then
+  -- Installed over the WHOLE work-RAM handler and filtered here: a tap over
+  -- the 0x800-byte sub-range never fired on this map.
+  STAP = mem:install_write_tap(m.wram, m.wram + 0xFFFF, 'ms1spr', function(offset, data, mask)
+    if offset >= m.wram + 0x8000 and offset < m.wram + 0x8800 then
+      local v = vpos_now()
+      sprlines[v] = (sprlines[v] or 0) + 1
+    end
+    return data
+  end)
+end
+
+do
+  local f = io.open(out..'/layout.txt', 'w')
+  f:write(('set %s mode %s\n'):format(setname, mode))
+  local off = 0
+  for _, r in ipairs(regions) do
+    f:write(('%-9s base=%06X len=%04X fileoff=%06X\n'):format(r[1], r[2], r[3], off))
+    off = off + r[3]
+  end
+  f:write(('total %06X\n'):format(off))
+  f:write('layers are listed in MAME m_tmap[] INDEX order\n')
+  f:write('SPRITES ARE TWO FRAMES AHEAD: to reproduce frame F, use the\n')
+  f:write('objram and spriteram captured at frame F-2 (megasys1_v.cpp\n')
+  f:write('screen_vblank: buffer2<-buffer, buffer<-live; draw reads buffer2)\n')
+  f:close()
+end
+
+local idx = io.open(out..'/index.txt', 'w')
+local F = 0
+
+local function dump_state()
+  local f = io.open(('%s/state/s%d.bin'):format(out, F), 'wb')
+  for _, r in ipairs(regions) do
+    local base, len = r[2], r[3]
+    local t = {}
+    for a = 0, len - 2, 2 do
+      local v = mem:read_u16(base + a)
+      t[#t+1] = string.char(v & 0xFF, (v >> 8) & 0xFF)
+    end
+    f:write(table.concat(t))
+  end
+  f:close()
+  local g = io.open(('%s/state/r%d.txt'):format(out, F), 'w')
+  for _, r in ipairs(m.regs) do g:write(('%s %04X\n'):format(r[2], shadow[r[2]])) end
+  g:write(('midframe_writes %04X\n'):format(midframe))
+  -- scroll_w renders rows up to vpos-1 with the OLD value before applying
+  -- the new one, so every row from this line down was drawn at line 240
+  -- from exactly the state dumped here.
+  g:write(('midframe_last %d\n'):format(midframe_last))
+  g:close()
+  midframe = 0
+  midframe_last = -1
+end
+
+local function dump_pixels()
+  -- screen:pixels() returns THREE values (pixels, width, height), and
+  -- io.write writes all of its arguments -- writing it directly appends the
+  -- ASCII "256224" to every frame. Bind the first value only.
+  local px = scr:pixels()
+  local f = io.open(('%s/frames/f%d.raw'):format(out, F), 'wb')
+  f:write(px)
+  f:close()
+end
+
+-- MS1_DIP: force a DIP switch, as "Field Name=value" (repeatable, comma
+-- separated). The M1 gate needs a FLIPPED frame, and no attract mode
+-- produces one -- flip is a DIP on every set that has it. Forcing it here is
+-- better than hunting for a scene that happens to set screen_flag bit 0,
+-- because it also proves the flip path end to end rather than by luck.
+--   MS1_DIP="Flip Screen=0"
+local dipspec = os.getenv('MS1_DIP')
+if dipspec then
+  for pair in dipspec:gmatch('[^,]+') do
+    local k, v = pair:match('^%s*(.-)%s*=%s*(%-?%w+)%s*$')
+    if k then
+      local want = tonumber(v, 16) or tonumber(v)
+      local done = false
+      for _, port in pairs(manager.machine.ioport.ports) do
+        for fname, field in pairs(port.fields) do
+          if fname == k then
+            field.user_value = want
+            print(('ms1_capture: DIP %q <- %d'):format(k, want))
+            done = true
+          end
+        end
+      end
+      if not done then print(('ms1_capture: WARNING no DIP field named %q'):format(k)) end
+    end
+  end
+end
+
+local scanf = scan and io.open(out..'/scan.txt', 'w') or nil
+
+emu.register_frame_done(function()
+  if warm < skip then
+    warm = warm + 1
+    return
+  end
+  if scan then
+    if F >= frames then
+      scanf:close()
+      print(('ms1_scan: %s (mode %s) scanned %d frames -> %s'):format(setname, mode, F, out))
+      manager.machine:exit()
+      return
+    end
+    local t = {}
+    for _, r in ipairs(m.regs) do t[#t+1] = ('%s=%04X'):format(r[2], shadow[r[2]]) end
+    scanf:write(('%d %s\n'):format(F, table.concat(t, ' ')))
+    F = F + 1
+    return
+  end
+  if F >= frames then
+    idx:close()
+    print(('ms1_capture: %s (mode %s) captured %d frames -> %s'):format(setname, mode, F, out))
+    manager.machine:exit()
+    return
+  end
+  if sprtap_f then
+    local t = {}
+    for v = 0, 300 do if sprlines[v] then t[#t+1] = ('%d:%d'):format(v, sprlines[v]) end end
+    sprtap_f:write(('%d %s\n'):format(F, table.concat(t, ' ')))
+    sprlines = {}
+  end
+  if do_pix then dump_pixels() end
+  if do_st  then dump_state()  end
+  idx:write(('%d %d %s\n'):format(F, scr:frame_number(), tostring(manager.machine.time.seconds)))
+  F = F + 1
+end)

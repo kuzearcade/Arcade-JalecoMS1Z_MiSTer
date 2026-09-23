@@ -1,0 +1,63 @@
+# Jaleco Mega System 1-Z -- file list for the JalecoMS1Z .rbf.
+# See docs/hw-bringup.md. Add files HERE, never through the Quartus IDE.
+#
+# jt12 (jt03 + its nested jt49) is tens of files deep and this design
+# instantiates only jt03.v. SEARCH_PATH resolves the rest by module name,
+# the way Verilator's -y does in the sim Makefiles.
+set_global_assignment -name SEARCH_PATH rtl/third_party/jt12/hdl
+set_global_assignment -name SEARCH_PATH rtl/third_party/jt12/jt49/hdl
+
+# Top level and clocks
+set_global_assignment -name SYSTEMVERILOG_FILE MS1Z.sv
+set_global_assignment -name VERILOG_FILE rtl/pll.v
+
+# Video output chain
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video_retime.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/third_party/crt_adjust/rtl/crt_vsize.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/third_party/crt_adjust/rtl/crt_adjust.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/crt_chain.sv
+
+# The board
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_main.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_sound.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_rom_hw.sv
+
+# Jaleco video (textually shared with Arcade-JalecoMS1BCD_MiSTer; the type-Z
+# behaviour is behind BOARD_Z). ms1_prio.sv is instantiated only when
+# BOARD_Z = 0, but must still parse.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/jaleco/ms1_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/jaleco/ms1_tilemap.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/jaleco/ms1_sprites.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/jaleco/ms1_prio.sv
+
+# Savestates
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate/savestate.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate/savestate_ui.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate/ss_m68k_park.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate/ss_z80_park.sv
+
+# SDRAM controller, arbiters and ROM caches
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram_req.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram_arb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/rom_cache1.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/rom_cache1_byte.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/rom_cache_n.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/rom_cache_n_byte.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/tile_prefetch_byte.sv
+
+# CPUs and the sound chip. T80s.v is the GHDL translation of the pinned T80
+# VHDL (docs/t80-vhdl-toolchain.md via tools/gen_t80_verilog.sh) -- the same
+# netlist Sand Scorpion and NMK16 ship on hardware.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/third_party/fx68k/fx68k.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/third_party/fx68k/fx68kAlu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/third_party/fx68k/uaddrPla.sv
+set_global_assignment -name VERILOG_FILE rtl/third_party_gen/t80/T80s.v
+set_global_assignment -name VERILOG_FILE rtl/third_party/jt12/hdl/jt03.v
+
+# OSD features: high scores and cheats share the work-RAM back door.
+set_global_assignment -name VERILOG_FILE rtl/third_party/hiscore/hiscore.v
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cheats.sv
+
+set_global_assignment -name SDC_FILE JalecoMS1Z.sdc

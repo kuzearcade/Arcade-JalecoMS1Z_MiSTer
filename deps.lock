@@ -1,0 +1,24 @@
+# Jaleco Mega System 1-Z MiSTerFPGA core -- vendored dependency lock file.
+#
+# The fx68k / sdram / hiscore / crt_adjust / template pins are carried over
+# unchanged from Arcade-JalecoMS1BCD_MiSTer; the t80 and jt12 pins from
+# Arcade-NMK16_MiSTer (the same pins Arcade-SandScrp_MiSTer ships). Every one
+# is already built and proven on hardware; do not bump a pin during bring-up.
+# The build-required subsets are COMMITTED (rtl/third_party/, sys/), as in
+# the sibling cores, so a clone builds without network access. sdram.sv,
+# hiscore and crt_vsize.sv are MODIFIED copies (see MS1BCD's deps.lock).
+#
+# NOT vendored: jt51, jt6295 and the TLCS-90 -- MS1-Z has no YM2151, no OKI
+# and no protection MCU.
+#
+# The Template_MiSTer entry is GPL-2.0-only against GPL-3.0 components --
+# flagged in MS1BCD's lock file; resolve before any public release.
+#
+# format: name|kind|git_url|ref|dest_path|license|notes
+template_mister|repo|https://github.com/MiSTer-devel/Template_MiSTer.git|3ea1134cf05d62c2b1db30362277a823d739ced2|sys|GPL-2.0|Top-level MiSTer framework (hps_io, video_mixer, scandoubler, OSD, PLL/tcl scripts). Also the source for the Template.sv/.sdc/.qpf/.qsf skeleton copied once into the repo root (see tools/bootstrap.sh) — GPL-2.0-only, NOT compatible-by-default with the GPL-3.0-only components below in a combined work; flagged in docs/PLAN.md, resolve before any public release.
+fx68k|repo|https://github.com/ijor/fx68k.git|0602ee4627b10f301298f2673d826cdd6baa9327|rtl/third_party/fx68k|GPL-3.0|Motorola 68000 cycle-accurate core (Jorge Cwik / ijor). Flat repo: fx68k.sv, fx68kAlu.sv, uaddrPla.sv, .mem ROMs. TWO instances on this board in B and C mode (main @ 8 or 12 MHz, sound @ 7 MHz); in D mode the sound instance is held in reset and the main CPU drives the single banked OKI itself.
+sdram|file|https://github.com/rmonic79/Arcade-Darius_MiSTer.git|HEAD:rtl/sdram.sv|rtl/sdram.sv|GPL-3.0-or-later (per file header, Copyright (c) 2018 Sorgelig)|No standalone upstream repo exists for this file — it's copy-pasted core-to-core. Seeded from this specific known-good copy, original blob e4228fb9bb0787f78e6a0f3bfcdc4399d89945c4.
+hiscore|repo|https://github.com/MiSTer-devel/Hiscores_MiSTer.git|31789f3b6bf61c379117f73adc879e3c9d5873ae|rtl/third_party/hiscore|GPL-3.0-or-later|MAME hiscore.dat save/load module (Alan Steremberg, Jim Gregory). MODIFIED, like rtl/sdram.sv: a dump-validation pass (SM_VALINIT..SM_VALDONE) before the restore — each entry's first/last byte must match the config's start/end values or the dump is discarded; and dpram_hs rewritten to a template Quartus will infer as M10K (upstream's write-through form built ~69k ALUTs at the HS_SCOREWIDTH this family needs). Also ties off hiscore_buffer's unconnected port B. Semantics unchanged.
+crt_adjust|repo|https://github.com/rmonic79/MiSTer-CRT-Adjust.git|c682de9f4acc61d8f4c7779efb48149d3baa3a8e|rtl/third_party/crt_adjust|GPL-3.0-or-later|"CRT Adjust" (Umberto Parisi / rmonic79): core-side analog CRT geometry — crt_adjust.sv (H-Size, H-Position, V-Shift through a one-line ping-pong buffer, sync kept native) and crt_vsize.sv (V-Size, PVM line-retimer or Cabinet photometric mode, self-measuring). Only rtl/crt_adjust.sv, rtl/crt_vsize.sv, LICENSE and README.md are committed. crt_adjust.sv is unmodified. *** crt_vsize.sv IS MODIFIED *** — one pipeline register (ring_q2) between the ring RAM's read mux and the Cabinet-mode square multiplier, that pipeline's phases moved one clock later, the integer square root split from 2x4 into 4x2 compare-subtract stages (needs clk/pixel >= 11), and the ring WRITE registered. Re-apply after any upstream bump. Wired by rtl/crt_chain.sv between video_retime and sys/video_mixer.sv. Needs clk/pixel >= 8 for Cabinet mode.
+t80|repo|https://github.com/MiSTer-devel/T80.git|830fd0315f0af5cdbcb0e703f1cea3ce4e91f538|rtl/third_party/t80|Permissive/BSD-style (embedded per-file headers; no repo-level LICENSE file)|Z80-compatible core, opencores.org/Daniel Wallner lineage via fpgaarcade.com/MikeJ, maintained by Sorgelig. VHDL: T80.vhd, T80_ALU.vhd, T80_MCode.vhd, T80_Pack.vhd, T80_Reg.vhd, T80s.vhd, T80pa.vhd, T80sed.vhd.
+jt12|repo|https://github.com/jotego/jt12.git|3a4c423fe03f00f51ef639550c9afe393087ac4c|rtl/third_party/jt12|GPL-3.0|YM2203/OPN-family FM core (Jose Tejada). Has a nested jt49 (AY-3-8910) submodule — bootstrap must init it too.
