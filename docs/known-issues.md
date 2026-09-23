@@ -127,8 +127,10 @@ Now: walk 127 → 0, first writer wins, sprites under opaque layer 1.
 `plane_e`/`plane_d` started at zero: pen 0, which is opaque. The row-at-a-time
 clear (MS1-60) sweeps a row only after the display has read it, so the first
 displayed frame after power-up is a solid sprite colour, and a pass that runs
-before a row has been swept finds every pixel taken. Fixed with an initial
-value of pen 15 (a constant M10K init, not ROM data). `rtl/jaleco/ms1_sprites.sv`
+before a row has been swept finds every pixel taken. Fixed by storing the pen
+nibble inverted at the RAM boundary, so the RAM's power-up zero reads as pen
+15 (an `initial` fill was tried first; Quartus 17 refuses a 65,536-iteration
+loop). `rtl/jaleco/ms1_sprites.sv`
 is shared text, so MS1BCD's copy has the same power-up frame.
 
 ## MS1Z-9 — MS1BCD's savestate never saves the sprite engine's state (open, MS1BCD)

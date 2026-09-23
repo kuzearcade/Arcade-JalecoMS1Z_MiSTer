@@ -113,7 +113,7 @@ module ms1_sprites #(
 	// high (as in sim/rtl/video_state) and wrong as soon as it is not.
 	input               rd_ce,
 	input       [15:0]  fb_rd_addr,     // {y[7:0], x[7:0]}
-	output reg   [8:0]  fb_rd_data,     // {pri, colour[3:0], pen[3:0]}
+	output       [8:0]  fb_rd_data,     // {pri, colour[3:0], pen[3:0]}
 
 	// ---- savestate. The plane is not regenerated from scratch every frame:
 	// sprite_flag bit 4 keeps the previous one (the P47 trails effect), so it
@@ -135,17 +135,18 @@ module ms1_sprites #(
 	//   plane_d -- the display readback
 	reg [8:0]  plane_e [0:65535];
 	reg [8:0]  plane_d [0:65535];
-	// Power-up contents: every pixel EMPTY (pen 15). Without this the plane
-	// starts at zero, which is pen 0 -- opaque -- so the first displayed
-	// frame is a solid sprite colour, and a pass that runs before the
-	// row-at-a-time clear has swept a row finds every pixel of it already
-	// taken (first writer wins) and draws nothing there. This is an
-	// initial value, not ROM data: it compiles to a constant M10K init.
-	integer pi;
-	initial for (pi = 0; pi < 65536; pi = pi + 1) begin
-		plane_e[pi] = 9'h00F;
-		plane_d[pi] = 9'h00F;
-	end
+	// THE PEN NIBBLE IS STORED INVERTED (PLANE_XOR), so the RAM's power-up
+	// zero reads back as pen 15 -- EMPTY. Stored plainly, zero is pen 0,
+	// which is opaque: the first displayed frame after power-up was a solid
+	// sprite colour, and a pass that runs before the row-at-a-time clear has
+	// swept a row found every pixel of it taken (first writer wins) and drew
+	// nothing there (ms1z docs/known-issues.md MS1Z-8). An `initial` fill
+	// would do it too, but Quartus 17 refuses a 65536-iteration loop, and
+	// this needs no initial contents at all. The XOR is applied at the RAM
+	// boundary only, so every logical value -- the engine's, the display's
+	// and the savestate image's -- is unchanged.
+	localparam [8:0] PLANE_XOR = 9'h00F;
+	reg [8:0] fb_rd_raw;
 	wire ss_plane = ss_active & (ss_addr[19:16] == 4'h2);    // 0x20000 65536
 	// The blit engine's own state. The plane alone is not enough: a save can
 	// land mid-pass, and even between passes the engine carries the object
@@ -162,7 +163,11 @@ module ms1_sprites #(
 	// stable across S_BA and S_BB, so the registered read lands exactly where
 	// the old combinational one did.
 	wire [15:0] plane_a = ss_active ? ss_addr[15:0] : cur_fb;
-	reg  [8:0]  eng_q;
+	reg  [8:0]  eng_q_raw;
+	// The XOR sits AFTER the read register: logic between the array read and
+	// the register stops Quartus absorbing the register into the M10K, and the
+	// whole plane stops being a RAM.
+	wire [8:0]  eng_q = eng_q_raw ^ PLANE_XOR;
 	reg [15:0] fb_wr_addr;
 	reg  [8:0] fb_wr_data;
 	reg        fb_we;
@@ -217,8 +222,8 @@ module ms1_sprites #(
 	wire  [8:0] pl_wd   = (ss_plane & ss_wr) ? ss_wdata[8:0]
 	                    : swp_we             ? 9'h00F : fb_wr_data;
 	always @(posedge clk) begin
-		if (pl_we) plane_e[pl_wa] <= pl_wd;
-		eng_q <= plane_e[plane_a];
+		if (pl_we) plane_e[pl_wa] <= pl_wd ^ PLANE_XOR;
+		eng_q_raw <= plane_e[plane_a];
 		ss_rdata <= ss_fsm ? ss_fsm_rdata : {7'd0, eng_q};
 	end
 
@@ -229,9 +234,10 @@ module ms1_sprites #(
 	// is dropped too -- fb_rd_addr only changes on the pixel enable, so
 	// reading every clock yields the same value wherever it is sampled.
 	always @(posedge clk) begin
-		if (pl_we) plane_d[pl_wa] <= pl_wd;
-		fb_rd_data <= plane_d[fb_rd_addr];
+		if (pl_we) plane_d[pl_wa] <= pl_wd ^ PLANE_XOR;
+		fb_rd_raw <= plane_d[fb_rd_addr];
 	end
+	assign fb_rd_data = fb_rd_raw ^ PLANE_XOR;
 
 	// ------------------------------------------------------------- sequencer
 	reg [31:0] pass_len;
