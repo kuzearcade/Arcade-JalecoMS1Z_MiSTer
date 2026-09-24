@@ -18,6 +18,22 @@ import numpy as np
 
 W, H = 256, 224
 
+def load_idx(d, i):
+    p = os.path.join(d, 'i%05d.raw' % i)
+    if not os.path.exists(p): return None
+    return np.frombuffer(open(p, 'rb').read(), '<u2').reshape(H, W)
+
+def mame_palette(d, F):
+    """Palette RGB (1024 x 3) from a MAME state dump, RRRRGGGGBBBBRGBx."""
+    p = os.path.join(d, 'state', 's%d.bin' % F)
+    if not os.path.exists(p): return None
+    w = np.frombuffer(open(p, 'rb').read()[:0x800], '<u2').astype(np.int32)
+    p5 = lambda v: (v << 3) | (v >> 2)
+    r = p5(((w >> 12) & 0xF) << 1 | ((w >> 3) & 1))
+    g = p5(((w >> 8) & 0xF) << 1 | ((w >> 2) & 1))
+    b = p5(((w >> 4) & 0xF) << 1 | ((w >> 1) & 1))
+    return np.stack([r, g, b], 1).astype(np.uint8)
+
 def load_core(d, i):
     p = os.path.join(d, 'f%05d.raw' % i)
     if not os.path.exists(p): return None
@@ -38,6 +54,13 @@ def main():
     ap.add_argument('--kmax', type=int, default=30)
     ap.add_argument('--k', type=int, default=None, help='skip the search')
     ap.add_argument('--show', type=int, default=8, help='worst frames to list')
+    ap.add_argument('--mame-base', type=int, default=0,
+                    help='absolute frame number of the MAME capture\'s frame 0 (its MS1_SKIP)')
+    ap.add_argument('--recolour', action='store_true',
+                    help='colour the core\'s frame through MAME\'s palette for that picture '
+                         '(the core\'s i<N>.raw index dumps, MS1_IDX=1): MAME pairs a '
+                         'composition with the NEXT frame\'s palette (MS1Z-5), so this is the '
+                         'comparison that tests the composition alone')
     a = ap.parse_args()
     core = {}
     i = a.first
@@ -50,8 +73,8 @@ def main():
     while True:
         f = load_mame(a.mame, j)
         if f is None: break
-        mame[j] = f; j += 1
-    print(f'core frames {min(core)}..{max(core)} ({len(core)}), MAME frames 0..{len(mame)-1}')
+        mame[j + a.mame_base] = f; j += 1
+    print(f'core frames {min(core)}..{max(core)} ({len(core)}), MAME frames {min(mame)}..{max(mame)}')
 
     def score(k):
         ex = n = 0
@@ -71,6 +94,11 @@ def main():
         m = mame.get(i + best)
         if m is None: continue
         f = core[i]
+        if a.recolour:
+            ix = load_idx(a.core, i)
+            pal = mame_palette(a.mame, i + best - a.mame_base)
+            if ix is not None and pal is not None:
+                f = pal[ix]
         diff = int(np.any(f != m, axis=2).sum())
         nonblank = int(np.any(f != 0, axis=2).sum())
         rows.append((i, diff, nonblank))

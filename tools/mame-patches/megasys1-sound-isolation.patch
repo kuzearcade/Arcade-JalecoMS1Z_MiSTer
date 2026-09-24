@@ -1,5 +1,5 @@
 diff --git a/src/mame/jaleco/megasys1.cpp b/src/mame/jaleco/megasys1.cpp
-index a25611c2525..2d71c87bc89 100644
+index a25611c2525..38684fb7769 100644
 --- a/src/mame/jaleco/megasys1.cpp
 +++ b/src/mame/jaleco/megasys1.cpp
 @@ -1926,18 +1926,37 @@ void megasys1_state::system_base(machine_config &config)
@@ -46,3 +46,25 @@ index a25611c2525..2d71c87bc89 100644
  }
  
  void megasys1_typea_state::system_A(machine_config &config)
+@@ -2265,7 +2284,20 @@ void megasys1_typez_state::system_Z(machine_config &config)
+ 
+ 	ym2203_device &ymsnd(YM2203(config, "ymsnd", 1500000));
+ 	ymsnd.irq_handler().set_inputline(m_audiocpu, 0);
+-	ymsnd.add_route(ALL_OUTPUTS, "mono", 0.50);
++	// LOCAL DIAGNOSTIC PATCH (Arcade-JalecoMS1Z_MiSTer audio gate). Not for
++	// upstream. MS1_SND_ISO=fm|ssg routes one half of the YM2203 so each can be
++	// compared with the core on its own (ymfm_mame.h: SSG channels 0..2, FM 3).
++	const char *z_iso = getenv("MS1_SND_ISO");
++	if (z_iso && strcmp(z_iso, "fm") == 0)
++		ymsnd.add_route(3, "mono", 0.50);
++	else if (z_iso && strcmp(z_iso, "ssg") == 0)
++	{
++		ymsnd.add_route(0, "mono", 0.50);
++		ymsnd.add_route(1, "mono", 0.50);
++		ymsnd.add_route(2, "mono", 0.50);
++	}
++	else
++		ymsnd.add_route(ALL_OUTPUTS, "mono", 0.50);
+ }
+ 
+ 

@@ -77,6 +77,11 @@ int main(int argc, char **argv) {
 			ppm.insert(atol(s.substr(a, b - a).c_str())); a = b + 1; } }
 	const char *framedir = getenv("MS1_FRAMEDIR");
 	FILE *wav = getenv("MS1_WAV") ? fopen(getenv("MS1_WAV"), "wb") : nullptr;
+	// The two halves of the YM2203 on the SAME scale as the mix (the core
+	// outputs (fm + {psg,5'd0}) >>> 1), for the per-source audio gate: FM is
+	// fm >>> 1, SSG is psg << 4 (unsigned, as jt12_top adds it).
+	FILE *wfm  = getenv("MS1_WAV_FM")  ? fopen(getenv("MS1_WAV_FM"),  "wb") : nullptr;
+	FILE *wssg = getenv("MS1_WAV_SSG") ? fopen(getenv("MS1_WAV_SSG"), "wb") : nullptr;
 	FILE *bus = getenv("MS1_BUSLOG") ? fopen(getenv("MS1_BUSLOG"), "w") : nullptr;
 	long busn = envl("MS1_BUSN", 200000);
 	FILE *trl = getenv("MS1_TRLOG") ? fopen(getenv("MS1_TRLOG"), "w") : nullptr;
@@ -146,7 +151,12 @@ int main(int argc, char **argv) {
 			uint32_t c = top->rgb;
 			fb[p*3] = c >> 16; fb[p*3+1] = c >> 8; fb[p*3+2] = c; ib[p] = top->dbg_pal_idx; p++;
 		}
-		if (wav && ++acc >= 1000) { acc = 0; int16_t s = (int16_t)top->snd; fwrite(&s, 2, 1, wav); }
+		if ((wav || wfm || wssg) && ++acc >= 1000) {
+			acc = 0;
+			if (wav)  { int16_t s = (int16_t)top->snd; fwrite(&s, 2, 1, wav); }
+			if (wfm)  { int16_t s = (int16_t)((int16_t)top->dbg_fm_snd >> 1); fwrite(&s, 2, 1, wfm); }
+			if (wssg) { int16_t s = (int16_t)(top->dbg_psg_snd << 4); fwrite(&s, 2, 1, wssg); }
+		}
 		if (bus && busn > 0 && top->dbg_z80_acc && !zacc_d) {
 			fprintf(bus, "%ld %04X %c%c %02X\n", frame, top->dbg_z80_addr, top->dbg_z80_io ? 'I' : 'M',
 			        top->dbg_z80_rw ? 'R' : 'W', top->dbg_z80_rw ? top->dbg_z80_rdata : top->dbg_z80_wdata);
@@ -206,6 +216,6 @@ int main(int argc, char **argv) {
 		if (top->dbg_slatch_we) sl0++;
 	}
 	printf("done: %ld frames, %ld clk, latch writes %u, ym writes %u\n", frame, ticks_total, sl0, top->dbg_ym_writes);
-	if (wav) fclose(wav); if (bus) fclose(bus); if (trl) fclose(trl);
+	if (wav) fclose(wav); if (wfm) fclose(wfm); if (wssg) fclose(wssg); if (bus) fclose(bus); if (trl) fclose(trl);
 	delete top; return 0;
 }

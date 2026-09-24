@@ -145,10 +145,22 @@ MS1BCD by this project.
 
 ## MS1Z-10 — The first 18 frames after reset differ from MAME (open)
 
-Core frames 0-17 against MAME's: the core shows black where MAME shows its
-boot screens, then 45,472 lit pixels where MAME is black. Everything from
-frame 18 lines up. Not yet investigated; MS1Z-8's power-up plane is a
-candidate for part of it.
+Core frames 0-17 against MAME's pictures 1-18:
+
+| frames | core | MAME picture |
+|---|---|---|
+| 0-4 | black | solid white |
+| 5-17 | the boot's tile patterns on both layers (6-13 colours) | black |
+| 18 on | identical (the title) | identical |
+
+MAME's OWN state dumps say those frames should not be black: from frame 5 on
+its palette holds 667 non-zero entries and both layers' VRAM is full, which
+is exactly what the core is drawing. So MAME is not presenting a picture of
+the state it holds during boot -- most likely a screen update that does not
+happen, leaving `pixels()` on a stale bitmap (MS1Z-5 describes that path).
+Not investigated further: nothing after frame 17 depends on it, and the
+board's own first seconds cannot be compared with MAME frame for frame
+anyway.
 
 ## MS1Z-11 — Legend of Makai's two raster splits need per-slice state to compare in the oracle (note)
 
