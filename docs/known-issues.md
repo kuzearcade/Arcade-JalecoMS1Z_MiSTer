@@ -169,3 +169,39 @@ flag is set, so demo frames carry register writes at lines 16 and 97
 (`midframe_last` in the capture). They did not stop the whole-frame match
 (MS1Z-7), but a frame that changes state between slices would need the
 slices captured separately (MS1-12's class).
+
+## MS1Z-12 — Sprites are one frame older than the background, against MAME (open, design decision)
+
+Whole-board simulation against MAME's attract demo (frames 1940-2159,
+recoloured through MAME's palette per MS1Z-5): the layers match MAME's picture
+at offset k = +1; the SPRITES match MAME's picture at k = 0. In one frame
+(2141) every one of the 1,581 differing pixels is a sprite pixel or the
+background a sprite should have covered; at k = 0 the sprite palette group
+differs in 0 pixels. The video block itself is exact (220/220, MS1Z-7), so
+this is purely WHEN the sprite list is read.
+
+Why: lomakai rewrites its Sprite Data during the FIRST ~100 lines of each
+frame (measured with the capture's tap: writes cluster at MAME lines 0-100,
+a few at 160-190). MAME's type Z draws sprites from live RAM at render time
+-- slices at the mid-frame scroll write (line 97) and at line 240 -- so a
+frame shows the list written during that same frame. The core, like MS1BCD,
+snapshots Sprite Data once at vblank and renders a whole-frame plane before
+the display reaches it, so the list written during frame N can only appear
+in frame N+1.
+
+Visible consequence: while the screen scrolls, sprites are drawn one scroll
+step behind the background (the player and the log platforms in frame 2141
+are offset by one frame of motion). The real board's sprite hardware is not
+documented; MAME's model, and the game writing its list mid-frame, both
+point to hardware that reads the list close to when each line is drawn.
+
+Options:
+1. A LINE renderer for type Z: during each raster line, walk the 128
+   entries in live Sprite Data and draw the ones on the next line into a
+   line buffer. That reproduces MAME's slices wherever the list is stable
+   within a slice. Budget: 3,072 clocks a line, ~512 to scan, ~32 per sprite
+   drawn -> ~80 sprites per line. A new block, not shared with MS1BCD.
+2. Two plane passes per frame (a late one for the rows below the game's
+   update, the vblank one for the rows above). Keeps the shared engine;
+   matches MAME only below the late snapshot line.
+3. Leave it: one frame of sprite lag during scrolling.
