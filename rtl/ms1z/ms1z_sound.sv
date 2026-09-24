@@ -193,11 +193,23 @@ module ms1z_sound (
 		.psg_A(), .psg_B(), .psg_C(), .fm_snd(fm_snd_w), .psg_snd(psg_snd_w),
 		.snd(ym_snd), .snd_sample(), .debug_view()
 	);
-	// Sand Scorpion measured this exact mix (jt12_top's fm + {psg,5'd0},
-	// then halved) against MAME's routed 0.5: FM lands at MAME's level, and
-	// halving it again made every band worse (SS-10, 3f4ac90). Change it only
-	// on a measurement against the isolated halves.
-	assign snd = ym_snd >>> 1;
+	// The mix, set by MEASUREMENT against MAME's isolated halves (MAME
+	// patched with MS1_SND_ISO=fm|ssg, the core's MS1_WAV_FM / MS1_WAV_SSG
+	// taps, lomakai's attract music, DC removed, 37-49 s):
+	//   FM   core vs MAME  -0.04 dB   with fm >>> 1 (Sand Scorpion's SS-10
+	//                                 finding: FM at MAME's routed 0.5)
+	//   SSG  core vs MAME  -4.11 dB   with jt12_top's {psg,5'd0} >>> 1; the
+	//        per-second ratio sits at 0.667 -- exactly 2/3 -- so the SSG is
+	//        weighted x1.5 here: {psg,5'd0} + {psg,4'd0}.
+	//   mix  -2.33 dB -> -0.40 dB, band correlation 0.997 both ways.
+	// jt03's own `snd` (fm + {psg,5'd0}) is not used. The sum is carried at
+	// 18 bits and saturated: 0 samples clip over the measured music.
+	wire signed [17:0] mix18 = {{2{fm_snd_w[15]}}, fm_snd_w}
+	                         + $signed({3'd0, psg_snd_w, 5'd0})
+	                         + $signed({4'd0, psg_snd_w, 4'd0});
+	wire signed [16:0] mix_h = mix18[17:1];
+	assign snd = (mix_h >  17'sd32767) ? 16'sh7FFF
+	           : (mix_h < -17'sd32768) ? 16'sh8000 : mix_h[15:0];
 	assign dbg_fm_snd  = fm_snd_w;
 	assign dbg_psg_snd = psg_snd_w;
 	assign dbg_irq_n   = ym_irq_n;

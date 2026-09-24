@@ -23,3 +23,11 @@ Quartus 17.0: 19,179 / 41,910 ALMs (46 %), 26,622 registers,
 Not yet done on the board: audio (needs ears or a capture), Pause, High
 Scores save/restore across a power cycle, Autofire, Orientation (HDMI path),
 CRT Adjust, the makaiden set.
+
+## 2026-09-24 — SSG level (MS1Z-13)
+
+`JalecoMS1Z.rbf` md5 `f282959f6bc41e0e97136d2612da45f3` (19,200 ALMs,
+399 M10K, timing met), replacing the first build under the same name. The SSG
+is weighted x1.5 against the FM, measured against MAME's isolated halves.
+Boots to the attract demo. The audio itself has not been listened to on
+the board.

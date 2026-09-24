@@ -205,3 +205,26 @@ Options:
    update, the vblank one for the rows above). Keeps the shared engine;
    matches MAME only below the late snapshot line.
 3. Leave it: one frame of sprite lag during scrolling.
+
+## MS1Z-13 — The SSG was 2/3 of MAME's level; FM exact (closed, measured)
+
+M2 gate 4, per source as the plan requires. MAME rendered 60 s of attract
+with `tools/mame-patches/megasys1-sound-isolation.patch` (`MS1_SND_ISO=fm`,
+`=ssg`, and unpatched for the mix; `-sound sdl` with SDL's dummy driver --
+`-sound none` writes silence, SS-10); the core from `sim/rtl/ms1z_frames`
+with `MS1_WAV`, `MS1_WAV_FM`, `MS1_WAV_SSG`. The attract is silent until
+the demo starts at 34 s; compared over the music (37-49 s, DC removed):
+
+| source | band correlation | level, core vs MAME |
+|---|---:|---:|
+| FM (`fm >>> 1`) | 0.953 | **-0.04 dB** |
+| SSG (`{psg,5'd0} >>> 1`, jt12_top's weight) | 0.998 | **-4.11 dB** |
+| mix | 0.997 | -2.33 dB |
+
+The SSG's per-second ratio to MAME is 0.667 in ten of twelve seconds --
+exactly 2/3 -- so `ms1z_sound.sv` now weights it x1.5
+(`{psg,5'd0} + {psg,4'd0}`) in an 18-bit sum, saturated. The mix built
+from the two measured taps that way: **-0.40 dB, band correlation 0.997,
+0 clipped samples**. In two louder seconds (43-45 s) the SSG ratio falls to
+0.57-0.62: a small difference in the volume curve at high levels, left as it
+is.

@@ -18,17 +18,20 @@ where every file came from.
 
 ## Status
 
-**In development.** Simulated from reset, the whole board boots the real
-program: the 68000, the Z80 and the YM2203 run, and the title screen and
-attract demo draw. Measured against MAME 0.289:
+**In development; runs on the DE10-Nano.** Measured against MAME 0.289:
 
-- the video block reproduces MAME's attract demo **pixel for pixel on 220 of
-  220 frames** (layers, sprites, palette, the raster split);
-- the whole board matches MAME's title-screen frames, with the differences
-  explained in `docs/known-issues.md` (MS1Z-5, MS1Z-10);
-- the bitstream builds and meets timing: 19,192 / 41,910 ALMs, 399 / 553 M10K.
+- **video block:** MAME's attract demo reproduced **pixel for pixel on 220 of
+  220 frames** from MAME's own state (layers, sprites, palette, the raster
+  split);
+- **whole board from reset:** the title matches; in the demo the layers match
+  and the sprites are one frame late (`docs/known-issues.md` MS1Z-12, open);
+- **audio:** FM within 0.04 dB of MAME, the mix within 0.4 dB, band
+  correlation 0.997 (MS1Z-13);
+- **board:** boots to attract, savestates save and load, Flip screen exact,
+  cheats work (`docs/hw-bringup.md`); 19,200 / 41,910 ALMs, 399 / 553 M10K,
+  timing met.
 
-Not yet shown on hardware. See `docs/PLAN.md` for the plan and its gates.
+See `docs/PLAN.md` for the plan and its gates.
 
 ## Supported games
 
