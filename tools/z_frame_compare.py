@@ -87,7 +87,7 @@ def main():
     ks = [a.k] if a.k is not None else range(a.kmin, a.kmax + 1)
     best = max(ks, key=lambda k: score(k))
     ex, n = score(best)
-    print(f'best fixed offset k = {best:+d}: {ex}/{n} frames pixel-exact')
+    print(f'best fixed offset k = {best:+d}: {ex}/{n} frames pixel-exact in the core\'s own palette')
 
     run = best_run = 0; run_start = best_start = None; rows = []
     for i in sorted(core):

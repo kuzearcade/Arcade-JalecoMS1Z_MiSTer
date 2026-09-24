@@ -71,13 +71,12 @@ module ms1z_main (
 	input        [9:0]  pal_rd_addr,
 	output reg  [15:0]  pal_rd_data,
 
-	// Sprite Data snapshot for the sprite engine: one pulse copies work RAM
-	// 0x0F8000-0x0F87FF (1024 words) into the engine's buffer. ONE stage,
-	// not B/C's two: MAME's type-Z draw_sprites reads live work RAM.
-	input               spr_snap,
-	output              spr_buf_busy,
-	input       [11:0]  spr_rd_addr,
-	output reg  [15:0]  spr_rd_data,
+	// LIVE Sprite Data (work RAM 0x0F8000-0x0F87FF, 1024 words) for the line
+	// renderer, registered read. MAME's type-Z draw_sprites reads live work
+	// RAM, and lomakai rewrites the list mid-frame (MS1Z-12), so there is no
+	// snapshot and no buffer.
+	input        [9:0]  spr_ra,
+	output reg  [15:0]  spr_rq,
 
 	output      [15:0]  reg_screen_flag,
 	output      [15:0]  reg_t0_sx, reg_t0_sy, reg_t0_ctrl,
@@ -203,7 +202,6 @@ module ms1z_main (
 	wire ss_vr1  = ss_active & (ss_addr[19:13] == 7'h05);   // 0x0A000  8192
 	wire ss_pal  = ss_active & (ss_addr[19:10] == 10'h38);  // 0x0E000  1024
 	wire ss_obj  = ss_active & (ss_addr[19:12] == 8'h0F);   // 0x0F000  4096
-	wire ss_sb1  = ss_active & (ss_addr[19:10] == 10'h68);  // 0x1A000  1024
 	wire ss_misc = ss_active & (ss_addr[19:4]  == 16'h1D00); // 0x1D000 scalars
 	wire ss_park = ss_active & (ss_addr[19:4]  == 16'h1D01); // 0x1D010 68000 park
 
@@ -297,37 +295,10 @@ module ms1z_main (
 		v1_rd_data <= vr1[v1_rd_addr];
 	end
 
-	// ---- the Sprite Data snapshot. wram_sp mirrors the 1 K words the engine
-	// needs; the copy reads it once per word (registered) and writes spr_b1
-	// one index behind, so every array has one read and one write.
-	reg [15:0] spr_b1 [0:1023];
-	reg [10:0] bufi;
-	reg        buf_busy;
-	reg        cp_run;
-	reg  [9:0] cp_i_d;
-	reg [15:0] wsp_q, sb1_q;
-	assign spr_buf_busy = buf_busy;
-	wire [9:0] sb1_ri = ss_active ? ss_addr[9:0] : bufi[9:0];
-	always @(posedge clk) begin
-		wsp_q  <= wram_sp[bufi[9:0]];
-		sb1_q  <= spr_b1[sb1_ri];
-		cp_i_d <= bufi[9:0];
-		cp_run <= buf_busy;
-	end
-	always @(posedge clk) begin
-		if (reset) begin buf_busy <= 1'b0; bufi <= 11'd0; end
-		else if (ss_w & ss_misc & (ss_addr[3:0] == 4'd0)) begin
-			bufi <= ss_wdata[11:1]; buf_busy <= ss_wdata[0];
-		end
-		else if (spr_snap) begin buf_busy <= 1'b1; bufi <= 11'd0; end
-		else if (ss_w & ss_sb1) spr_b1[ss_addr[9:0]] <= ss_wdata;
-		else if (buf_busy) begin
-			if (cp_run) spr_b1[cp_i_d] <= wsp_q;
-			if (bufi == 11'd1024) buf_busy <= 1'b0;   // one extra for the write behind
-			else bufi <= bufi + 11'd1;
-		end
-	end
-	always @* spr_rd_data = spr_b1[spr_rd_addr[9:0]];
+	// ---- the live Sprite Data read port: wram_sp mirrors the 1 K words at
+	// work RAM word 0x4000, written with every write to them, so the line
+	// renderer reads the list as it stands without a second work-RAM port.
+	always @(posedge clk) spr_rq <= wram_sp[spr_ra];
 
 	// ---- video registers: shadows, byte-lane correct, restored by the image
 	reg [15:0] sh_scrf, sh_t0x, sh_t0y, sh_t0c, sh_t1x, sh_t1y, sh_t1c;
@@ -404,7 +375,6 @@ module ms1z_main (
 	reg [15:0] ss_misc_rdata;
 	always @* begin
 		case (ss_addr[3:0])
-			4'd0:  ss_misc_rdata = {4'd0, bufi, buf_busy};
 			4'd1:  ss_misc_rdata = {12'd0, irq3_h, irq2_h, irq1_h, iack_d};
 			4'd2:  ss_misc_rdata = {15'd0, slatch_d};
 			4'd3:  ss_misc_rdata = {8'd0, slatch_data};
@@ -424,7 +394,6 @@ module ms1z_main (
 		else if (ss_vr1)  ss_rdata <= vr1_q;
 		else if (ss_pal)  ss_rdata <= pal_q;
 		else if (ss_obj)  ss_rdata <= obj_q;
-		else if (ss_sb1)  ss_rdata <= sb1_q;
 		else if (ss_park) ss_rdata <= ss_park_rdata;
 		else if (ss_misc) ss_rdata <= ss_misc_rdata;
 		else              ss_rdata <= 16'h0000;

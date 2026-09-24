@@ -55,7 +55,12 @@ module ms1_video #(
 	parameter [20:0] L0_ROM_MASK = 21'h1FFFFF,
 	parameter [20:0] L1_ROM_MASK = 21'h1FFFFF,
 	parameter [20:0] L2_ROM_MASK = 21'h1FFFFF,
-	parameter [12:0] SPR_TILE_MASK = 13'h1FFF
+	parameter [12:0] SPR_TILE_MASK = 13'h1FFF,
+	// EXT_SPR = 1: no internal sprite engine. The sprite pixel comes in on
+	// ext_fb_q, answering ext_fb_rd_addr with ms1_sprites' one-clock readback
+	// latency, so the rest of the pipeline cannot tell the difference. MS1-Z
+	// uses it for its line renderer (rtl/ms1z/ms1z_sprline.sv, MS1Z-12).
+	parameter EXT_SPR = 0
 ) (
 	input               clk,
 	input               ce,
@@ -120,7 +125,11 @@ module ms1_video #(
 	// it lets a frame be recoloured through another palette, which is what a
 	// comparison against MAME's pictures needs (they pair one frame's picture
 	// with the next frame's palette -- ms1z docs/known-issues.md MS1Z-5).
-	output reg   [9:0]  dbg_pal_idx
+	output reg   [9:0]  dbg_pal_idx,
+	// EXT_SPR only: the bitmap point {y, x} being read this clock, and the
+	// external sprite pixel {pri, colour, pen}, pen 15 = none.
+	output      [15:0]  ext_fb_rd_addr,
+	input        [8:0]  ext_fb_q
 );
 	// ---- flip: mirror the sample point over the visible window.
 	// The OSD's "Flip screen" is XORed in here rather than handled
@@ -212,6 +221,16 @@ module ms1_video #(
 	// the sweep; taking the row itself from fb_rd_addr rather than from vy
 	// makes it follow the screen flip for free.
 	wire disp_active = (vy < VIS_H[8:0]);
+	assign ext_fb_rd_addr = {by[7:0], bx[7:0]};
+	generate
+	if (EXT_SPR) begin : g_ext_spr
+		assign fb_q = ext_fb_q;
+		assign spr_busy = 1'b0;
+		assign obj_addr = 12'd0;  assign spr_ram_addr = 12'd0;
+		assign spr_rom_addr = 22'd0;
+		assign ss_spr_rdata = 16'd0;
+		assign dbg_spr_pass_cycles = 32'd0;  assign dbg_spr_late_swaps = 16'd0;
+	end else begin : g_int_spr
 	ms1_sprites #(.BOARD_Z(BOARD_Z), .TILE_MASK(SPR_TILE_MASK)) u_spr (.clk(clk), .reset(reset | ss_rst_dbg),
 		.start(spr_start), .busy(spr_busy),
 		.buf_busy(spr_buf_busy), .disp_active(disp_active),
@@ -224,6 +243,8 @@ module ms1_video #(
 		.rd_ce(ce), .fb_rd_addr({by[7:0], bx[7:0]}), .fb_rd_data(fb_q),
 		.ss_active(ss_active), .ss_addr(ss_addr), .ss_wr(ss_wr),
 		.ss_wdata(ss_wdata), .ss_rdata(ss_spr_rdata));
+	end
+	endgenerate
 
 	reg [8:0] fb_d1, fb_d2;
 	always @(posedge clk) if (ce) begin fb_d1 <= fb_q; fb_d2 <= fb_d1; end

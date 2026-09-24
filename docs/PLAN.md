@@ -460,6 +460,10 @@ protection field.
 9. **Sprite snapshot**: at `vblank_rise`, copy work RAM `0x0F8000-0x0F87FF`
    (1K words) into the sprite engine's buffer through the existing
    `buf_busy` path. Z uses **one** stage, not B/C's two (§1.6, zero latency).
+   *As built (MS1Z-12): no snapshot. `rtl/ms1z/ms1z_sprline.sv` reads live
+   work RAM while each line is drawn, because lomakai rewrites its list during
+   the first ~100 lines of the frame and a vblank snapshot showed it a frame
+   late.*
 
 ### 2.5 The sound board — `ms1z_sound.sv`, with NMK16's Z80 specifics
 
@@ -513,6 +517,13 @@ protection field.
       pix = l1_opaque  ? L1
           : spr_opaque ? SPR
           :              L0      // layer 0 is drawn opaque
+
+*As built (MS1Z-12), Z does not use `ms1_sprites.sv` any more: `ms1_video`
+takes `EXT_SPR = 1` and `ms1z_sprline.sv` draws each line from live Sprite
+Data into a ping-pong line buffer, one line ahead of the beam (the same
+127 → 0 first-writer-wins order, code and position rules as below). The
+`BOARD_Z` path below still exists in the shared file and was what
+MS1Z-7's 220/220 was measured on.*
 
 `ms1_sprites.sv` (`BOARD_Z`):
 - Skip the Object RAM walk. Walk Sprite Data entries **0 → 127** into a
@@ -1045,7 +1056,7 @@ MS1BCD's layout.
 | `0x0A000-0x0BFFF` | layer 1 VRAM | 8192 |
 | `0x0C000-0x0CFFF` | Object RAM | 4096 |
 | `0x0D000-0x0D3FF` | palette | 1024 |
-| `0x0D400-0x0D7FF` | sprite snapshot buffer | 1024 |
+| ~~`0x0D400-0x0D7FF`~~ | ~~sprite snapshot buffer~~ (removed with MS1Z-12: the line renderer holds no state across a line, so it is rebuilt from work RAM) | -- |
 | `0x0E000-0x0E3FF` | Z80 RAM (byte pairs) | 1024 |
 | `0x0E400-0x0E4FF` | YM2203 shadow | 256 |
 | `0x0E500-0x0E53F` | scalars: scroll x/y/ctrl x2, `screen_flag`, latch, IRQ holds, phi/Z80/YM divider phases, write-stretch state, YM select | ≤ 64 |

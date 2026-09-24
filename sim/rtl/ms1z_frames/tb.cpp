@@ -178,11 +178,11 @@ int main(int argc, char **argv) {
 			long nz = 0;
 			for (size_t i = 0; i < (size_t)W * H; i++) if (fb[i*3] | fb[i*3+1] | fb[i*3+2]) nz++;
 			if (frame % every == 0)
-				printf("f=%ld pix=%zu nonblack=%ld acc=%u vregw=%u vramw=%u irq=%u/%u/%u ym=+%u latchw=%u latchr=+%u romwait=%u sprpass=%u late=%u scf=%04X t0=%04X,%04X,%04X t1=%04X,%04X,%04X\n",
+				printf("f=%ld pix=%zu nonblack=%ld acc=%u vregw=%u vramw=%u irq=%u/%u/%u ym=+%u latchw=%u latchr=+%u romwait=%u sprline_max=%u overruns=%u maxhits=%u scf=%04X t0=%04X,%04X,%04X t1=%04X,%04X,%04X\n",
 				       frame, p, nz, top->dbg_acc, top->dbg_vregw, top->dbg_vramw,
 				       top->dbg_irq1 - i1, top->dbg_irq2 - i2, top->dbg_irq3 - i3,
 				       top->dbg_ym_writes - ym0, 0u, top->dbg_latch_reads - lr0,
-				       top->dbg_romwait, top->dbg_spr_pass_cycles, top->dbg_spr_late_swaps,
+				       top->dbg_romwait, top->dbg_spr_pass_cycles, top->dbg_spr_late_swaps, top->dbg_spr_max_hits,
 				       top->dbg_scf, top->dbg_t0x, top->dbg_t0y, top->dbg_t0c, top->dbg_t1x, top->dbg_t1y, top->dbg_t1c);
 			fflush(stdout);
 			if (wlog_from >= 0 && frame >= wlog_from) {

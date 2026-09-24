@@ -330,3 +330,4 @@ set_global_assignment -name VERILOG_FILE rtl/third_party/jt12/hdl/jt03.v
 set_global_assignment -name VERILOG_FILE rtl/third_party/hiscore/hiscore.v
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/cheats.sv
 set_global_assignment -name SDC_FILE JalecoMS1Z.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_sprline.sv

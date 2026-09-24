@@ -14,7 +14,7 @@ obj_dir/Vms1z_core: tb.cpp $(RTLSRC)
 		-y $(RTL)/ms1z -y $(RTL)/jaleco -y $(RTL)/savestate -y $(RTL)/third_party/fx68k \
 		-y $(RTL)/third_party/jt12/hdl -y $(RTL)/third_party/jt12/jt49/hdl \
 		-y $(RTL)/third_party/jt12/hdl/mixer \
-		$(RTL)/ms1z/ms1z_core.sv $(RTL)/ms1z/ms1z_main.sv $(RTL)/ms1z/ms1z_sound.sv \
+		$(RTL)/ms1z/ms1z_core.sv $(RTL)/ms1z/ms1z_main.sv $(RTL)/ms1z/ms1z_sound.sv $(RTL)/ms1z/ms1z_sprline.sv \
 		$(RTL)/jaleco/ms1_video.sv $(RTL)/jaleco/ms1_tilemap.sv $(RTL)/jaleco/ms1_sprites.sv \
 		$(RTL)/jaleco/ms1_prio.sv \
 		$(RTL)/savestate/ss_m68k_park.sv $(RTL)/savestate/ss_z80_park.sv \
@@ -32,7 +32,7 @@ obj_mame/Vms1z_core: tb.cpp $(RTLSRC)
 		-y $(RTL)/ms1z -y $(RTL)/jaleco -y $(RTL)/savestate -y $(RTL)/third_party/fx68k \
 		-y $(RTL)/third_party/jt12/hdl -y $(RTL)/third_party/jt12/jt49/hdl \
 		-y $(RTL)/third_party/jt12/hdl/mixer \
-		$(RTL)/ms1z/ms1z_core.sv $(RTL)/ms1z/ms1z_main.sv $(RTL)/ms1z/ms1z_sound.sv \
+		$(RTL)/ms1z/ms1z_core.sv $(RTL)/ms1z/ms1z_main.sv $(RTL)/ms1z/ms1z_sound.sv $(RTL)/ms1z/ms1z_sprline.sv \
 		$(RTL)/jaleco/ms1_video.sv $(RTL)/jaleco/ms1_tilemap.sv $(RTL)/jaleco/ms1_sprites.sv \
 		$(RTL)/jaleco/ms1_prio.sv \
 		$(RTL)/savestate/ss_m68k_park.sv $(RTL)/savestate/ss_z80_park.sv \

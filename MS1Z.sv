@@ -598,7 +598,7 @@ ms1z_core #(.LOOKAHEAD(8)) core (
 	.dbg_ym_writes(), .dbg_latch_reads(), .dbg_fm_snd(), .dbg_psg_snd(),
 	.dbg_z80_addr(), .dbg_z80_acc(), .dbg_z80_rw(), .dbg_z80_io(),
 	.dbg_z80_wdata(), .dbg_z80_rdata(), .dbg_slatch_we(), .dbg_slatch_data(),
-	.dbg_spr_pass_cycles(), .dbg_spr_late_swaps(),
+	.dbg_spr_pass_cycles(), .dbg_spr_late_swaps(), .dbg_spr_max_hits(),
 	.dbg_l0_miss(), .dbg_l1_miss(), .dbg_pix(),
 	.ss_freeze(ss_freeze), .ss_resume(ss_resume), .ss_active(ss_active),
 	.ss_addr(ss_addr), .ss_wr(ss_wr), .ss_wdata(ss_wdata), .ss_rdata(ss_rdata),

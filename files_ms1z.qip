@@ -22,6 +22,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_core.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_main.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_sound.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_rom_hw.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ms1z/ms1z_sprline.sv
 
 # Jaleco video (textually shared with Arcade-JalecoMS1BCD_MiSTer; the type-Z
 # behaviour is behind BOARD_Z). ms1_prio.sv is instantiated only when

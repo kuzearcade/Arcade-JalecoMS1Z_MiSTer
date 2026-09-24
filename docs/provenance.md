@@ -17,8 +17,9 @@ Arcade-SandScrp_MiSTer `b09d359`.
 | file | from | status |
 |---|---|---|
 | `rtl/jaleco/ms1_tilemap.sv` | MS1BCD | shared: `ROM_MASK` (tile-code wrap on small ROMs) |
-| `rtl/jaleco/ms1_sprites.sv` | MS1BCD | shared: `BOARD_Z` (direct Sprite Data walk, the `cov2` plane bit), `TILE_MASK` |
-| `rtl/jaleco/ms1_video.sv` | MS1BCD | shared: `BOARD_Z` (fixed order, palette groups), per-layer ROM masks |
+| `rtl/jaleco/ms1_sprites.sv` | MS1BCD | shared: `BOARD_Z` (direct Sprite Data walk, 127 → 0 first-writer-wins), `TILE_MASK`; not instantiated by this core since MS1Z-12 |
+| `rtl/jaleco/ms1_video.sv` | MS1BCD | shared: `BOARD_Z` (fixed order, palette groups), per-layer ROM masks, `EXT_SPR` (sprites from an external line source) |
+| `rtl/ms1z/ms1z_sprline.sv` | new | the type-Z sprite line renderer (MS1Z-12): live Sprite Data, one line ahead, ping-pong line buffer |
 | `rtl/jaleco/ms1_prio.sv` | MS1BCD | verbatim (instantiated only when `BOARD_Z = 0`) |
 | `rtl/ms1z/ms1z_main.sv` | MS1BCD `rtl/ms1bcd/ms1_main.sv` | derived |
 | `rtl/ms1z/ms1z_core.sv` | MS1BCD `rtl/ms1bcd/ms1bcd_core.sv` | derived |
@@ -44,4 +45,5 @@ Arcade-SandScrp_MiSTer `b09d359`.
 | `tools/gen_autofire_mra.py` | MS1BCD | forked: `INCLUDED` |
 | `sim/oracle/ms1_capture.lua` | MS1BCD | forked: type-Z map, `MS1_SPRTAP`, the `vpos` fix (MS1Z-4) |
 | `sim/rtl/ms1z_frames/` | MS1BCD `sim/rtl/ms1_frames` | derived |
+| `sim/rtl/video_state_zl/` | `sim/rtl/video_state_z` | derived: the line renderer against MAME's state at real raster pacing |
 | everything else under `tools/` | MS1BCD | verbatim, some not yet adapted (B/C/D-specific) |

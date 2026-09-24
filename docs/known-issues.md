@@ -170,41 +170,52 @@ flag is set, so demo frames carry register writes at lines 16 and 97
 (MS1Z-7), but a frame that changes state between slices would need the
 slices captured separately (MS1-12's class).
 
-## MS1Z-12 — Sprites are one frame older than the background, against MAME (open, design decision)
+## MS1Z-12 — Sprites were one frame older than the background, against MAME (closed: line renderer)
 
 Whole-board simulation against MAME's attract demo (frames 1940-2159,
-recoloured through MAME's palette per MS1Z-5): the layers match MAME's picture
-at offset k = +1; the SPRITES match MAME's picture at k = 0. In one frame
-(2141) every one of the 1,581 differing pixels is a sprite pixel or the
-background a sprite should have covered; at k = 0 the sprite palette group
-differs in 0 pixels. The video block itself is exact (220/220, MS1Z-7), so
-this is purely WHEN the sprite list is read.
+recoloured through MAME's palette per MS1Z-5): the layers matched MAME's
+picture at offset k = +1 but the SPRITES matched at k = 0. In one frame
+(2141) every one of the 1,581 differing pixels was a sprite pixel or the
+background a sprite should have covered. The video block itself was exact
+(220/220, MS1Z-7), so the problem was purely WHEN the sprite list is read.
 
 Why: lomakai rewrites its Sprite Data during the FIRST ~100 lines of each
 frame (measured with the capture's tap: writes cluster at MAME lines 0-100,
 a few at 160-190). MAME's type Z draws sprites from live RAM at render time
 -- slices at the mid-frame scroll write (line 97) and at line 240 -- so a
 frame shows the list written during that same frame. The core, like MS1BCD,
-snapshots Sprite Data once at vblank and renders a whole-frame plane before
-the display reaches it, so the list written during frame N can only appear
-in frame N+1.
+snapshotted Sprite Data at vblank and rendered a whole-frame plane, so the
+list written during frame N could only appear in frame N+1: while the screen
+scrolled, sprites were drawn one step of motion behind the background.
 
-Visible consequence: while the screen scrolls, sprites are drawn one scroll
-step behind the background (the player and the log platforms in frame 2141
-are offset by one frame of motion). The real board's sprite hardware is not
-documented; MAME's model, and the game writing its list mid-frame, both
-point to hardware that reads the list close to when each line is drawn.
+Fix: `rtl/ms1z/ms1z_sprline.sv`, a LINE renderer. At the end of each raster
+line it walks the 128 entries of live Sprite Data (127 -> 0, first writer
+wins), and draws the ones on the next line into one half of a ping-pong
+line buffer while the display reads the other half. `ms1_video` takes it
+through `EXT_SPR = 1`. The vblank snapshot, its savestate region and the
+whole-frame sprite plane are gone (399 -> 251 M10K). The renderer holds no
+state across a line, so a savestate needs nothing from it: it rebuilds from
+work RAM.
 
-Options:
-1. A LINE renderer for type Z: during each raster line, walk the 128
-   entries in live Sprite Data and draw the ones on the next line into a
-   line buffer. That reproduces MAME's slices wherever the list is stable
-   within a slice. Budget: 3,072 clocks a line, ~512 to scan, ~32 per sprite
-   drawn -> ~80 sprites per line. A new block, not shared with MS1BCD.
-2. Two plane passes per frame (a late one for the rows below the game's
-   update, the vblank one for the rows above). Keeps the shared engine;
-   matches MAME only below the late snapshot line.
-3. Leave it: one frame of sprite lag during scrolling.
+Measured:
+- video block with the line renderer at real raster pacing
+  (`sim/rtl/video_state_zl`, MAME's state per frame): **220 / 220** demo
+  frames pixel-exact, 0 overruns, at most 6 sprites and 424 of the 3,072
+  clocks on any line;
+- whole board from reset, demo 1940-2159 at k = +1, recoloured: **195 / 220**
+  frames pixel-exact (was: sprites wrong on every scrolling frame). The other
+  25 (core frames 2111-2142) differ by 4-16 pixels, ALL on the top two visible
+  rows and all sprite pixels. This is where the two models part: the core
+  draws row 0 during the line before it, MAME draws the whole top slice at
+  line 97, and the game is still writing the list in between. Which one the
+  board does is not documented; drawing a row later than the line before it
+  would need a whole-frame buffer again;
+- whole board, title 0-399 at k = +1: frames 18-398 pixel-exact, as before
+  (0-17 are MS1Z-10);
+- 0 overruns in either run; at most 8 sprites and 480 clocks on a line
+  (the running maxima, last printed at demo frame 2100);
+- board (`docs/hw-bringup.md`, 2026-09-24): attract demo correct,
+  savestate save and load correct.
 
 ## MS1Z-13 — The SSG was 2/3 of MAME's level; FM exact (closed, measured)
 

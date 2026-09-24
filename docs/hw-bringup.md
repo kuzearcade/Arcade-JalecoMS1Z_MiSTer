@@ -31,3 +31,15 @@ CRT Adjust, the makaiden set.
 is weighted x1.5 against the FM, measured against MAME's isolated halves.
 Boots to the attract demo. The audio itself has not been listened to on
 the board.
+
+## 2026-09-24 — sprite line renderer (MS1Z-12)
+
+`JalecoMS1Z.rbf` md5 `1ae9281289ac842ac39fe5ebc5c0d51c` (19,684 ALMs,
+26,874 registers, 251 / 553 M10K, timing met), replacing the previous build
+under the same name.
+
+| test | result |
+|---|---|
+| load, attract | title, then the demo; while the waterfall scrolls, the player and the log platforms sit on the background |
+| savestate: Alt+F1 at timer 3:52, run 20 s (back to the title), F1 | 1 s after the load the demo is back at 3:52 with the player and sprites in place; 8 s later it has played on to 3:43 |
+

@@ -181,6 +181,7 @@ sim/rtl/*/roms/*.bin
 
 # MS1-Z additions
 sim/rtl/*/Vms1z_run
+sim/rtl/*/Vms1z_line
 sim/rtl/*/*.mem
 sim/rtl/*/frame_*.ppm
 sim/rtl/*/obj_mame/

@@ -18,13 +18,7 @@
 module ms1z_core #(
 	parameter integer LOOKAHEAD = 0,
 	parameter [8:0]   HTOTAL = 9'd384,
-	parameter [8:0]   VTOTAL = 9'd278,
-	// Raster line at whose END the Sprite Data snapshot is taken and the
-	// sprite pass starts. MAME draws type-Z sprites from LIVE work RAM at each
-	// (partial) screen update, so when the board samples it is a measurement
-	// against the oracle, not an assumption; 239 = vblank_rise, MS1BCD's point.
-	// The pass must finish before row 16 is displayed.
-	parameter [8:0]   SPR_SNAP_LINE = 9'd239
+	parameter [8:0]   VTOTAL = 9'd278
 ) (
 	input               clk,           // 48 MHz
 	input               reset,
@@ -83,8 +77,9 @@ module ms1z_core #(
 	output       [7:0]  dbg_z80_wdata, dbg_z80_rdata,
 	output              dbg_slatch_we,
 	output       [7:0]  dbg_slatch_data,
-	output      [31:0]  dbg_spr_pass_cycles,
-	output      [15:0]  dbg_spr_late_swaps,
+	output      [31:0]  dbg_spr_pass_cycles,   // longest line render, clocks
+	output      [15:0]  dbg_spr_late_swaps,    // lines cut short at the deadline (low 16 bits)
+	output      [15:0]  dbg_spr_max_hits,      // most sprites on one line
 	output reg  [31:0]  dbg_l0_miss, dbg_l1_miss, dbg_pix,
 
 	// savestate
@@ -144,20 +139,14 @@ module ms1z_core #(
 	wire [15:0] v0d, v1d;
 	wire  [9:0] pala;
 	wire [15:0] pald;
-	wire [11:0] spra;
-	wire [15:0] sprd;
+	wire  [9:0] spr_ra;
+	wire [15:0] spr_rq;
 	wire [15:0] r_scf, r0x, r0y, r0c, r1x, r1y, r1c;
-	wire        spr_buf_busy;
 	wire        slatch_we;
 	wire  [7:0] slatch_data;
 	wire [15:0] ss_main_rdata, ss_snd_rdata, ss_spr_rdata;
 	wire        ss_m68k_parked, ss_z80_parked;
 
-	// One pulse at the end of SPR_SNAP_LINE: snapshot, then the pass (which
-	// waits for the snapshot's buf_busy to drop).
-	wire spr_snap = vtick & (vcount == SPR_SNAP_LINE);
-	reg  spr_start;
-	always @(posedge clk) spr_start <= spr_snap;
 
 	ms1z_main u_main (
 		.clk(clk), .reset(reset),
@@ -170,8 +159,7 @@ module ms1z_core #(
 		.tr_addr(tr_addr), .tr_data(tr_data), .tr_we(tr_we), .tr_valid(tr_valid),
 		.v0_rd_addr(v0a), .v1_rd_addr(v1a), .v0_rd_data(v0d), .v1_rd_data(v1d),
 		.pal_rd_addr(pala), .pal_rd_data(pald),
-		.spr_snap(spr_snap), .spr_buf_busy(spr_buf_busy),
-		.spr_rd_addr(spra), .spr_rd_data(sprd),
+		.spr_ra(spr_ra), .spr_rq(spr_rq),
 		.reg_screen_flag(r_scf),
 		.reg_t0_sx(r0x), .reg_t0_sy(r0y), .reg_t0_ctrl(r0c),
 		.reg_t1_sx(r1x), .reg_t1_sy(r1y), .reg_t1_ctrl(r1c),
@@ -220,7 +208,9 @@ module ms1z_core #(
 			default: ss_ras_rdata = 16'h0000;
 		endcase
 	end
-	wire ss_plane_sel = (ss_addr[19:16] == 4'h2) | (ss_addr[19:5] == 15'h0E83);  // plane + sprite FSM
+	// No sprite plane on type Z: the line renderer holds nothing a save needs
+	// (it redraws each line from Sprite Data, which is in work RAM).
+	wire ss_plane_sel = 1'b0;
 	wire ss_from_snd  = (ss_addr[19:11] == 9'h03E)      // Z80 RAM
 	                  | (ss_addr[19:7]  == 13'h03C0)    // YM shadow
 	                  | (ss_addr[19:4]  == 16'h1D02)    // sound scalars
@@ -249,17 +239,37 @@ module ms1z_core #(
 		end
 	end
 
+	// ------------------------------------------------ sprites, a line at a time
+	// (MS1Z-12). Drawn from live Sprite Data one raster line ahead of the beam.
+	wire [15:0] spr_fb_a;
+	wire  [8:0] spr_fb_q;
+	wire [31:0] spr_overruns;
+	wire [15:0] spr_max_cycles;
+	ms1z_sprline #(.TILE_MASK(13'h03FF), .VTOTAL(VTOTAL)) u_sprline (
+		.clk(clk), .reset(reset),
+		.vtick(vtick & ~ss_hold), .vcount(vcount), .flip(r_scf[0] ^ osd_flip),
+		.spr_ra(spr_ra), .spr_rq(spr_rq),
+		.rom_addr(spr_rom_addr), .rom_data(spr_rom_data), .rom_ready(spr_rom_ready),
+		.fb_rd_addr(spr_fb_a), .fb_q(spr_fb_q),
+		.dbg_overruns(spr_overruns), .dbg_max_hits(dbg_spr_max_hits),
+		.dbg_max_cycles(spr_max_cycles)
+	);
+	assign dbg_spr_pass_cycles = {16'd0, spr_max_cycles};
+	assign dbg_spr_late_swaps  = spr_overruns[15:0];
+
 	wire [12:0] v2a_unused;
 	wire [20:0] l2a_unused, l2u_unused;
-	wire [11:0] obja_unused;
+	wire [11:0] obja_unused, spra_unused;
+	wire [21:0] sprrom_unused;
 	ms1_video #(.LOOKAHEAD(LOOKAHEAD), .TOTAL_W(HTOTAL), .BOARD_Z(1),
 	            .L0_ROM_MASK(21'h01FFFF),     // scroll1: 128 KB, 4096 8x8 tiles
 	            .L1_ROM_MASK(21'h00FFFF),     // scroll2:  64 KB, 2048 tiles
-	            .SPR_TILE_MASK(13'h03FF))     // sprites: 128 KB, 1024 16x16 tiles
+	            .SPR_TILE_MASK(13'h03FF),     // sprites: 128 KB, 1024 16x16 tiles
+	            .EXT_SPR(1))                  // sprites from ms1z_sprline
 	u_video (
 		.clk(clk), .ce(ce_pix), .reset(reset),
 		.mode(2'd0), .nlayers(2'd2), .osd_flip(osd_flip),
-		.spr_buf_busy(spr_buf_busy),
+		.spr_buf_busy(1'b0),
 		// no active_layers register on type Z: MAME forces 0x000b (layers 0
 		// and 1 and sprites); no sprite_flag, no sprite bank.
 		.active_layers(16'h000B), .sprite_flag(16'h0000),
@@ -274,18 +284,19 @@ module ms1z_core #(
 		.l0_rom_use_addr(l0_rom_use_addr), .l1_rom_use_addr(l1_rom_use_addr),
 		.l2_rom_use_addr(l2u_unused),
 		.l0_rom_data(l0_rom_data), .l1_rom_data(l1_rom_data), .l2_rom_data(8'hFF),
-		.spr_start(spr_start), .spr_busy(),
-		.obj_addr(obja_unused), .spr_ram_addr(spra),
-		.obj_data(16'd0), .spr_ram_data(sprd),
-		.spr_rom_addr(spr_rom_addr), .spr_rom_data(spr_rom_data),
-		.spr_rom_ready(spr_rom_ready),
+		.spr_start(1'b0), .spr_busy(),
+		.obj_addr(obja_unused), .spr_ram_addr(spra_unused),
+		.obj_data(16'd0), .spr_ram_data(16'd0),
+		.spr_rom_addr(sprrom_unused), .spr_rom_data(8'd0),
+		.spr_rom_ready(1'b1),
 		.ss_rst_dbg(1'b0),
 		.dbg_o0(), .dbg_o2(),
 		.ss_active(ss_active), .ss_addr(ss_addr), .ss_wr(ss_wr),
 		.ss_wdata(ss_wdata), .ss_spr_rdata(ss_spr_rdata),
-		.dbg_spr_pass_cycles(dbg_spr_pass_cycles), .dbg_spr_late_swaps(dbg_spr_late_swaps),
+		.dbg_spr_pass_cycles(), .dbg_spr_late_swaps(),
 		.prom_addr(), .prom_data(8'd0),
 		.pal_addr(pala), .pal_data(pald),
-		.rgb(rgb), .rgb_valid(rgb_valid), .dbg_pal_idx(dbg_pal_idx)
+		.rgb(rgb), .rgb_valid(rgb_valid), .dbg_pal_idx(dbg_pal_idx),
+		.ext_fb_rd_addr(spr_fb_a), .ext_fb_q(spr_fb_q)
 	);
 endmodule
