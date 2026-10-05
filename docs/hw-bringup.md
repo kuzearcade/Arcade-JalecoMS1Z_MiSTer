@@ -43,3 +43,25 @@ under the same name.
 | load, attract | title, then the demo; while the waterfall scrolls, the player and the log platforms sit on the background |
 | savestate: Alt+F1 at timer 3:52, run 20 s (back to the title), F1 | 1 s after the load the demo is back at 3:52 with the player and sprites in place; 8 s later it has played on to 3:43 |
 
+
+## 2026-10-05 — Autofire removed, buttons Attack/Jump (v2026-10-05, issue #1)
+
+`Arcade-JalecoMS1Z_20261005.rbf` md5 `29ea32a851839d76b379f8690fab5beb`
+(251 / 553 M10K, timing met), deployed with both new `.mra` files, each
+checked by md5. The 20260923 bitstream was moved to `/media/fat/rbf_backup/`
+so the loader cannot pick it. Keys through `mister_keys.py`.
+
+| test | result |
+|---|---|
+| load from `Legend of Makai (World).mra` | title at 30 s, attract demo at 45 s |
+| coin (5) + start (1) | game starts, timer 2:59 counting down |
+| Left Alt (Jump, Button 2) tap | player in the air 1 s after the press |
+| Left Ctrl (Attack, Button 1) tap | attack pose, 316 pixels of the player box differ from idle |
+| Left Ctrl held 2.5 s | one swing, back to the idle pose at 1.8 s: no repeat, so no autofire |
+| Space, Q (the old Button 3 keys) held | player box identical to idle, 0 pixels differ |
+| savestate: Alt+F1 at 2:53, run 21 s (2:32), F1 | `Legend of Makai (World)_1.ss` 393,224 bytes; 4 s after the load the timer reads 2:48, 8 s on 2:38 |
+| cheat Infinite Time (status bit 34, via `lomakai.CFG`) | demo timer holds 9:58 over 10 s; without the cheat 4:00 to 3:49 over the same 10 s. Status bits unshifted by the autofire removal |
+
+Not checked: a real gamepad's default mapping (`A,B,-,Start,R`) -- MiSTer
+applies it only to a pad with no saved mapping, and the virtual keyboard
+cannot show it.
