@@ -46,8 +46,8 @@ See `docs/PLAN.md` for the plan and its gates.
 
 Aspect ratio, Scandoubler Fx, Orientation, Flip screen (in the core), CRT
 Adjust, DIP switches from the `.mra`, Pause, High Scores, seven cheats named
-for the game, Autofire (hidden unless the `.mra` unlocks it --
-`autofire_releases/`), four savestate slots, the MAME keyboard map. **F2** is
+for the game, four savestate slots, the MAME keyboard map. Pad buttons are
+Attack and Jump. There is no Autofire: Legend of Makai is a platform game. **F2** is
 Service 1: on this board DSW2 bit 7 is the Invulnerability switch, not
 service mode.
 

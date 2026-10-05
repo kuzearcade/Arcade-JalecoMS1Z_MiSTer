@@ -21,7 +21,7 @@ Quartus 17.0: 19,179 / 41,910 ALMs (46 %), 26,622 registers,
 | cheat Always Have All Keys (bit 38, masked read-modify-write) | the HUD's `KEY=` shows a key where it was empty |
 
 Not yet done on the board: audio (needs ears or a capture), Pause, High
-Scores save/restore across a power cycle, Autofire, Orientation (HDMI path),
+Scores save/restore across a power cycle, Orientation (HDMI path),
 CRT Adjust, the makaiden set.
 
 ## 2026-09-24 — SSG level (MS1Z-13)

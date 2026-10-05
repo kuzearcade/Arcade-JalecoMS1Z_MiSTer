@@ -393,7 +393,7 @@ fork, logged in `provenance.md`):
 | `third_party/fx68k` | one instance now |
 | `pll.v`, `pll_video96.v`, `sys/` | same clocks |
 | `sim/models/sdram_model.sv` | |
-| `tools/`: `mister_keys.py`, `mister_sweep.sh`, `board_feature_test.py`, `audio_compare.py`, `frame_compare.py`, `compare_frames.py`, `bus_compare.py`, `mk_ioctl_stream.py`, `mkgfxrom.py`, `gen_autofire_mra.py` (INCLUDED list edited), `run_*.sh`, `bootstrap.sh` | |
+| `tools/`: `mister_keys.py`, `mister_sweep.sh`, `board_feature_test.py`, `audio_compare.py`, `frame_compare.py`, `compare_frames.py`, `bus_compare.py`, `mk_ioctl_stream.py`, `mkgfxrom.py`, `run_*.sh`, `bootstrap.sh` | |
 
 **From MS1BCD, parameterised** (shared text, `BOARD_Z` guarded):
 `ms1_tilemap.sv` (region-size masks for wrap), `ms1_sprites.sv`,
@@ -608,12 +608,11 @@ Every feature of MS1BCD is supported. How each maps:
 | Pause (68000 on enPhi2, sound CPU gated, chips free-running) | T80 `CEN` gated the same way |
 | High Scores (Save/Reset, greyed out while Off) | `hiscore.dat` has `lomakai`/`makaiden` (`hiscore.dat:6023`); see the trap below |
 | Cheats, 7 slots, hidden per slot by menumask | **game-named slots** (one game per core): Infinite Lives, Infinite Energy, Infinite Time, Infinite Money, Infinite Jumps, Invincibility, Always Have All Keys; the data is identical for both sets |
-| Autofire P1/P2, hidden unless `<switches>` byte 2 bit 7 | unchanged; on this board Button 3 has no game function, so the "Button 3 becomes a plain Button 1" trade costs nothing |
-| `autofire_releases/` mirror, git-ignored | both sets included (the only game; opt-in via the mirror) |
+| Autofire P1/P2, hidden unless `<switches>` byte 2 bit 7 | **removed** (2026-10-05): Legend of Makai is a platform game, not a shoot-'em-up; `gen_autofire_mra.py` and `autofire_releases/` went with it |
 | Savestates, 4 slots, F1/F5/F3/F4, Alt to save, info messages | unchanged (§2.8) |
 | Service key (F2) | **remapped to `SYSTEM` b5 (Service 1)**; never DSW2 b7, which is Invulnerability here |
 | MAME keyboard map (`mister_keys.py` with the chord fix) | unchanged |
-| `J1` button list, positionally matched to `.mra` `<buttons>` | `Button 1,Button 2,Button 3,Start,Coin` (Button 3 = autofire alias) |
+| `J1` button list, positionally matched to `.mra` `<buttons>` | `Attack,Jump,-,Start,Coin` (Q8, GitHub issue #1); the hidden `-` holds Start/Coin at bits 7/8 |
 | `sw_seen` gating: the core waits for `<switches>` (MS1-47, MS1-53) | kept; there is no mode byte to be idle, but the DIPs still arrive late |
 | `releases/` `.rbf` named `Arcade-JalecoMS1Z_<BUILD_DATE>.rbf` | unchanged |
 | `_alternatives/_<Parent>/` without parentheses | `_alternatives/_Legend of Makai/Makai Densetsu (Japan).mra` |
@@ -644,13 +643,11 @@ extension, verified by a sim test and on the board.
   - The clone goes in `_alternatives/_Legend of Makai/`.
   - ROM parts carry CRCs from §1.7, with the 68000 pair interleaved in the
     right byte order (MS1-49).
-  - `<switches>` carries the three bytes: DSW1, DSW2, and a flags byte with
-    [7] = autofire unlock and the rest spare.
+  - `<switches>` carries the three bytes: DSW1, DSW2, and a flags byte
+    that nothing reads (it held the autofire unlock until that was removed).
   - `<buttons>`.
   - The PROM part at index 1, the hiscore block (index 3) and the cheat table
     (index 5), both preserved across regeneration by `carry_over()`.
-- `gen_autofire_mra.py`: `INCLUDED = ("Legend of Makai",)`. It covers the
-  clone through its directory.
 - `mkgfxrom.py`: the same two formats as B/C.
 - `gen_rom_map.py` writes `ms1z_rom_map.vh` from `ms1z_romdata.py`.
 - Committed board tooling: `tools/mister_sweep.sh`, `board_feature_test.py`
@@ -677,7 +674,7 @@ numbers.
 ### M0 — Foundation
 
 1. `git init`. `.gitignore` from MS1BCD: `/mame/`, `/mame_roms/`,
-   `/autofire_releases/`, `output_files*/`, sim build dirs, frame dumps,
+   `output_files*/`, sim build dirs, frame dumps,
    `**/roms/*.bin`, oracle traces.
 2. `deps.lock`: MS1BCD's `template_mister`, `fx68k`, `sdram`, `hiscore` and
    `crt_adjust` pins, plus NMK16's `t80` and `jt12` pins (with the nested
@@ -822,8 +819,6 @@ can mean the feature was never exercised):
 - High scores: set a score, power cycle, confirm restore; the `.nvm` patch
   test.
 - Each cheat slot against MAME-comparable behaviour.
-- Autofire rates from the `autofire_releases/` copy, including the `.dip`
-  override caveat.
 - **Savestates: save, reload the core, load, with sound checked**, in the
   attract and in play, all four slots.
 - Service key.
@@ -852,9 +847,7 @@ Each one was paid for already. The reference is where the evidence lives.
 - MiSTer never sends an empty `<switches>` (MS1-47). The core must not run on
   defaults before the switches arrive (MS1-53).
 - A saved `config/dips/<mra name>.dip` overrides the whole switches value,
-  flags byte included, so the autofire unlock is invisible until it is
-  deleted. `autofire_releases/` shares `.mra` names with `releases/`, so the
-  two trees collide.
+  flags byte included.
 - Regenerating `.mra` files after deleting a tree loses the hiscore and cheat
   blocks unless `carry_over()` has a source. Checksum before and after
   (MS1BCD session, 2026-09-23).
@@ -968,8 +961,8 @@ Each one was paid for already. The reference is where the evidence lives.
 - **Q6 Sprite latency on hardware.** The same source as Q5, in motion.
 - **Q7 Z80 address range used.** A MAME Lua read tap on `0x4000-0xBFFF` and
   `0xC800-0xDFFF` over attract + play. Expect zero hits.
-- **Q8 Button roles.** Which of Button 1 / Button 2 is attack and which is
-  jump, for the `.mra` `<buttons>` names. From play.
+- **Q8 Button roles** (answered by GitHub issue #1).** Button 1 is Attack,
+  Button 2 is Jump, from play.
 - **Q9 Cabinet DIP.** Does "Cocktail" do anything in MAME's type Z (no
   cocktail input mux)? Test in MAME.
 - **Q10 Demo sounds and service.** What SYSTEM b5 (Service 1) does in
@@ -1012,8 +1005,6 @@ Each one was paid for already. The reference is where the evidence lives.
     "P3,CRT Adjust;",
     "P3O[101],CRT Adjust,Off,On;",
     ... (P3 H-Size / H-Position / V-Shift / V-Size / V-Size Mode, verbatim from MS1BCD)
-    "h1O[12:10],P1 Autofire,Off,10Hz,12Hz,15Hz,20Hz,30Hz;",
-    "h1O[15:13],P2 Autofire,Off,10Hz,12Hz,15Hz,20Hz,30Hz;",
     "-;",
     "DIP;",
     "-;",
@@ -1039,7 +1030,7 @@ Each one was paid for already. The reference is where the evidence lives.
     "P4R[43],Load state (F1 F5 F3 F4);",
     "-;",
     "R[0],Reset;",
-    "J1,Button 1,Button 2,Button 3,Start,Coin;",
+    "J1,Attack,Jump,-,Start,Coin;",
     "I,", ... (MS1BCD's savestate info messages, verbatim)
     "V,v",`BUILD_DATE
 

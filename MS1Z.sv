@@ -3,11 +3,11 @@
 //
 // Derived from Arcade-JalecoMS1BCD_MiSTer's MS1BCD.sv (docs/provenance.md),
 // which is itself adapted from Sand Scorpion and NMK16. The OSD, keyboard map,
-// autofire, high scores, cheats, savestates, CRT Adjust, orientation and the
-// video chain are MS1BCD's. What differs:
+// high scores, cheats, savestates, CRT Adjust, orientation and the video chain
+// are MS1BCD's. What differs:
 //
-//   * One board, so no game-mode byte: the third <switches> byte carries only
-//     the Autofire unlock in bit 7.
+//   * One board, so no game-mode byte: the third <switches> byte is unused.
+//   * No Autofire: Legend of Makai is a platform game, not a shoot-'em-up.
 //   * A Z80 and a YM2203 instead of a sound 68000, a YM2151 and two OKIs.
 //     The YM2203 is mono; AUDIO_L and AUDIO_R carry the same sample.
 //   * The 68000 runs at 6 MHz and reads its inputs directly (no I/O MCU).
@@ -64,12 +64,6 @@ localparam CONF_STR = {
 	"P3O[78:74],CRT V-Shift,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"P3O[107:104],CRT V-Size,0,+1,+2,+3,+4,-4,-3,-2,-1;",
 	"P3O[108],CRT V-Size Mode,PVM,Cabinet;",
-	// Autofire on button 1, clocked by the game's own vblank. While a player
-	// has it on, that player's button 3 is a plain button 1. The game has
-	// only two buttons, so button 3 costs nothing here. Hidden (h1) unless the
-	// .mra's third <switches> byte sets bit 7 (tools/gen_autofire_mra.py).
-	"h1O[12:10],P1 Autofire,Off,10Hz,12Hz,15Hz,20Hz,30Hz;",
-	"h1O[15:13],P2 Autofire,Off,10Hz,12Hz,15Hz,20Hz,30Hz;",
 	"-;",
 	"DIP;",
 	"-;",
@@ -100,7 +94,7 @@ localparam CONF_STR = {
 	"-;",
 	"R[0],Reset;",
 	// Positionally matched against the <buttons> list gen_ms1z_mra.py writes.
-	"J1,Button 1,Button 2,Button 3,Start,Coin;",
+	"J1,Attack,Jump,-,Start,Coin;",
 	"I,",
 	"Slot=F1 F5 F3 F4|Save=+Alt,",
 	"Active Slot 1,",
@@ -152,9 +146,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	// [11] hides Aspect ratio and Scandoubler Fx under direct video;
 	// [10] greys out Save/Reset Scores while High Scores is Off;
 	// [9:3] hide the cheat slots the loaded .mra has no cheat for;
-	// [1] shows the Autofire options, from <switches> byte 2 bit 7;
 	// [0] hides Orientation under direct video.
-	.status_menumask({4'd0, direct_video, hs_enable, ch_avail, 1'b0, autofire_unlock, direct_video}),
+	.status_menumask({4'd0, direct_video, hs_enable, ch_avail, 2'b00, direct_video}),
 	.status_in({status[127:42], ss_slot, status[39:0]}),
 	.status_set(ss_status_update),
 	.info_req(ss_info_req),
@@ -270,7 +263,7 @@ end
 // ------------------------------------------------------------------
 // The .mra <switches> block, ioctl index 254. Bytes 0 and 1 are DSW1 and
 // DSW2 (MAME's 16-bit DSW port at 0x080006, low and high byte). Byte 2 is
-// not a DIP: bit 7 unlocks the Autofire menu, and nothing else reads it.
+// not a DIP, and nothing reads it.
 // ------------------------------------------------------------------
 reg [7:0] dip_sw [0:7];
 integer dip_i;
@@ -279,21 +272,14 @@ always @(posedge clk_sys) begin
 	if (ioctl_download && ioctl_wr && (ioctl_index == 16'd254) && !ioctl_addr[24:3])
 		dip_sw[ioctl_addr[2:0]] <= ioctl_dout;
 end
-// An .mra with no <switches> block leaves byte 2 at its idle 0xFF, which
-// would unlock Autofire; only an explicitly written byte counts.
-reg sw_byte2_seen = 1'b0;
-always @(posedge clk_sys)
-	if (ioctl_download && ioctl_wr && (ioctl_index == 16'd254) && ioctl_addr[24:0] == 25'd2)
-		sw_byte2_seen <= 1'b1;
-wire autofire_unlock = sw_byte2_seen & dip_sw[2][7];
 
 // ------------------------------------------------------------------
 // Keyboard: MAME's default bindings, always live, ORed with the pads.
-//   P1: arrows, Left Ctrl = B1, Left Alt = B2, Space = B3 (autofire alias)
-//   P2: R/F/D/G, A = B1, S = B2, Q = B3
+//   P1: arrows, Left Ctrl = B1 (Attack), Left Alt = B2 (Jump)
+//   P2: R/F/D/G, A = B1, S = B2
 //   Coin 1 = 5, Coin 2 = 6, Service 1 = 9 (and F2), Start 1/2 = 1/2
 // ------------------------------------------------------------------
-reg [6:0] kb_p1 = 7'd0, kb_p2 = 7'd0;   // [0]=R [1]=L [2]=D [3]=U [4]=B1 [5]=B2 [6]=B3
+reg [5:0] kb_p1 = 6'd0, kb_p2 = 6'd0;   // [0]=R [1]=L [2]=D [3]=U [4]=B1 [5]=B2
 reg kb_start1 = 1'b0, kb_start2 = 1'b0;
 reg kb_coin1 = 1'b0, kb_coin2 = 1'b0, kb_service = 1'b0, kb_f2 = 1'b0;
 reg kb_toggle_d = 1'b0;
@@ -307,14 +293,12 @@ always @(posedge clk_sys) begin
 			9'h174: kb_p1[0] <= ps2_key[9];
 			9'h014: kb_p1[4] <= ps2_key[9];
 			9'h011: kb_p1[5] <= ps2_key[9];
-			9'h029: kb_p1[6] <= ps2_key[9];
 			9'h02D: kb_p2[3] <= ps2_key[9];
 			9'h02B: kb_p2[2] <= ps2_key[9];
 			9'h023: kb_p2[1] <= ps2_key[9];
 			9'h034: kb_p2[0] <= ps2_key[9];
 			9'h01C: kb_p2[4] <= ps2_key[9];
 			9'h01B: kb_p2[5] <= ps2_key[9];
-			9'h015: kb_p2[6] <= ps2_key[9];
 			9'h016: kb_start1  <= ps2_key[9];
 			9'h01E: kb_start2  <= ps2_key[9];
 			9'h02E: kb_coin1   <= ps2_key[9];
@@ -327,44 +311,10 @@ always @(posedge clk_sys) begin
 end
 
 
-// ------------------------------------------------------------------
-// Autofire. The pattern advances once per game frame and restarts on each
-// press, so a tap always fires on its first frame. With it on, button 1 is
-// (held & pattern) | button 3 -- button 3 is the plain-fire escape hatch. The
-// game has no button 3 of its own, so nothing is traded away.
-// ------------------------------------------------------------------
+// Game vblank, for the cheat engine and the savestate "wait for vblank".
 wire        vblank_core;
-wire  [6:0] p1_raw = joystick_0[6:0] | kb_p1;
-wire  [6:0] p2_raw = joystick_1[6:0] | kb_p2;
-reg  vbl_d = 1'b0;
-wire frame_tick = vblank_core & ~vbl_d;
-always @(posedge clk_sys) vbl_d <= vblank_core;
-
-function automatic [3:0] af_on(input [2:0] m);
-	case (m) 3'd1: af_on = 4'd3; 3'd2: af_on = 4'd2; 3'd3: af_on = 4'd2; 3'd4: af_on = 4'd1; 3'd5: af_on = 4'd1; default: af_on = 4'd0; endcase
-endfunction
-function automatic [3:0] af_len(input [2:0] m);
-	case (m) 3'd1: af_len = 4'd6; 3'd2: af_len = 4'd5; 3'd3: af_len = 4'd4; 3'd4: af_len = 4'd3; 3'd5: af_len = 4'd2; default: af_len = 4'd1; endcase
-endfunction
-
-reg  [3:0] af1_phase = 4'd0, af2_phase = 4'd0;
-reg        af1_held_d = 1'b0, af2_held_d = 1'b0;
-wire [2:0] af1_mode = status[12:10];
-wire [2:0] af2_mode = status[15:13];
-always @(posedge clk_sys) begin
-	af1_held_d <= p1_raw[4];
-	af2_held_d <= p2_raw[4];
-	if (p1_raw[4] & ~af1_held_d) af1_phase <= 4'd0;
-	else if (frame_tick) af1_phase <= (af1_phase + 4'd1 >= af_len(af1_mode)) ? 4'd0 : af1_phase + 4'd1;
-	if (p2_raw[4] & ~af2_held_d) af2_phase <= 4'd0;
-	else if (frame_tick) af2_phase <= (af2_phase + 4'd1 >= af_len(af2_mode)) ? 4'd0 : af2_phase + 4'd1;
-end
-wire af1_en = (af1_mode != 3'd0);
-wire af2_en = (af2_mode != 3'd0);
-wire p1_b1 = af1_en ? ((p1_raw[4] & (af1_phase < af_on(af1_mode))) | p1_raw[6]) : p1_raw[4];
-wire p2_b1 = af2_en ? ((p2_raw[4] & (af2_phase < af_on(af2_mode))) | p2_raw[6]) : p2_raw[4];
-wire p1_b3 = af1_en ? 1'b0 : p1_raw[6];
-wire p2_b3 = af2_en ? 1'b0 : p2_raw[6];
+wire  [5:0] p1_raw = joystick_0[5:0] | kb_p1;
+wire  [5:0] p2_raw = joystick_1[5:0] | kb_p2;
 
 
 // ------------------------------------------------------------------
@@ -372,14 +322,15 @@ wire p2_b3 = af2_en ? 1'b0 : p2_raw[6];
 //   P1/P2  bit 0 right, 1 left, 2 down, 3 up, 4 B1, 5 B2; 6-7 unknown (idle)
 //   SYSTEM bit 0 start 1, 1 start 2, 5 service 1, 6 coin 1, 7 coin 2
 // MiSTer numbers pad buttons by position in the .mra's <buttons> list:
-// Button 1, Button 2, Button 3, Start, Coin -> bits 4, 5, 6, 7, 8.
+// Attack, Jump, -, Start, Coin -> bits 4, 5, 6, 7, 8. The "-" is a hidden
+// placeholder that holds Start and Coin at bits 7 and 8; bit 6 is unread.
 // ------------------------------------------------------------------
 wire p1_start = joystick_0[7];
 wire p2_start = joystick_1[7];
 wire p1_coin  = joystick_0[8];
 wire p2_coin  = joystick_1[8];
-wire [7:0] in_p1 = ~{2'b00, p1_raw[5], p1_b1, p1_raw[3], p1_raw[2], p1_raw[1], p1_raw[0]};
-wire [7:0] in_p2 = ~{2'b00, p2_raw[5], p2_b1, p2_raw[3], p2_raw[2], p2_raw[1], p2_raw[0]};
+wire [7:0] in_p1 = ~{2'b00, p1_raw};
+wire [7:0] in_p2 = ~{2'b00, p2_raw};
 wire [7:0] in_system = ~{p2_coin | kb_coin2, p1_coin | kb_coin1, kb_service | kb_f2, 3'b000,
                          p2_start | kb_start2, p1_start | kb_start1};
 wire [7:0] in_dsw1 = dip_sw[0];
@@ -610,8 +561,8 @@ ms1z_core #(.LOOKAHEAD(8)) core (
 assign AUDIO_L = snd;
 assign AUDIO_R = snd;
 
-// visible is rows 16..239 of 278; autofire and the savestate engine's "wait
-// for vblank" are the consumers
+// visible is rows 16..239 of 278; the cheat engine and the savestate engine's
+// "wait for vblank" are the consumers
 assign vblank_core = (vcount_core < 9'd16) | (vcount_core >= 9'd240);
 
 
@@ -654,10 +605,9 @@ wire clk_vid = clk_ram;
 // hcount has already wrapped into line L+1, and the delayed vcount still
 // reads L, so those pixels land in line L's buffer where they belong.
 //
-// `vblank_core` deliberately keeps the LIVE vcount: it drives the autofire
-// frame tick and the savestate engine's "wait for vblank", neither of which
-// is part of the picture, and both of which have been measured on the live
-// one.
+// `vblank_core` deliberately keeps the LIVE vcount: it drives the cheat engine
+// and the savestate engine's "wait for vblank", neither of which is part of
+// the picture, and both of which have been measured on the live one.
 localparam integer RGB_LAT = 5;
 reg [8:0] hc_lat [0:RGB_LAT-1];
 reg [8:0] vc_lat [0:RGB_LAT-1];

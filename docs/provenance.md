@@ -42,7 +42,6 @@ Arcade-SandScrp_MiSTer `b09d359`.
 | `tools/mk_ms1z_images.py`, `tools/z_frame_compare.py` | new | |
 | `tools/gen_hiscore_mra.py` | MS1BCD | forked: `:ram/share` records |
 | `tools/gen_cheats_mra.py` | MS1BCD | forked: Makai slot names, 3 actions, masked kind |
-| `tools/gen_autofire_mra.py` | MS1BCD | forked: `INCLUDED` |
 | `sim/oracle/ms1_capture.lua` | MS1BCD | forked: type-Z map, `MS1_SPRTAP`, the `vpos` fix (MS1Z-4) |
 | `sim/rtl/ms1z_frames/` | MS1BCD `sim/rtl/ms1_frames` | derived |
 | `sim/rtl/video_state_zl/` | `sim/rtl/video_state_z` | derived: the line renderer against MAME's state at real raster pacing |
