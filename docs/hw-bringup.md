@@ -65,3 +65,19 @@ so the loader cannot pick it. Keys through `mister_keys.py`.
 Not checked: a real gamepad's default mapping (`A,B,-,Start,R`) -- MiSTer
 applies it only to a pad with no saved mapping, and the virtual keyboard
 cannot show it.
+
+## 2026-10-05 — sound across a savestate load
+
+Same bitstream (`29ea32a8...`). Audio recorded from the board's HDMI output
+through the capture box (`arecord -D hw:1,0`, 48 kHz; L = R, the YM2203 is
+mono), 70 s from 6 s into a game with no input: Alt+F1 at ~6.5 s, F1 at ~31.5 s.
+
+| check | result |
+|---|---|
+| silence anywhere in the 70 s | none: lowest 0.25 s RMS 748 (a quiet note in the tune), lowest 10 ms RMS around the load 702 |
+| click at the load | none: largest sample step in 29-35 s is 1773, against 3436 elsewhere in the take |
+| does the sound come back to the save point | yes. Up to 31.87 s the take matches itself 25.172 s earlier in 0 of 132 50 ms windows; from 31.92 s every window does (corr 0.94-0.995), i.e. at 31.9 s the music jumps back to what played at 6.75 s and replays it sample for sample |
+| how long the replay stays exact | to 42 s (10 s, corr >= 0.997); 44-56 s it holds at corr 0.92-0.999 with the lag moved 10-20 ms, about one frame, which is the tempo still right but the note timing a frame off the original run |
+
+So the Z80 and YM2203 state is saved and restored, and the music plays on
+through a load without a dropout.
