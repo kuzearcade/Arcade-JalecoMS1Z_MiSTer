@@ -19,13 +19,23 @@ so labels accumulate until the first @ line.
 """
 import re, sys, glob, os
 
-# START_WAIT is 0x0C000000 cycles (~5 s at 40 MHz clk_sys), not the ~65k the
-# upstream doc's example uses. These boards run a destructive work-RAM test at
-# boot; with a short wait the module's start/end byte checks pass on a transient
-# test pattern, it writes the saved scores into RAM mid-test, and the game halts
-# with "WORK RAM CHECK ERROR" (seen on tdragon2, address 1F743B). Waiting until
-# the test is finished is the fix, and it lives in data rather than RTL.
-HDR = [0x0C,0x00,0x00,0x00,  # START_WAIT
+# START_WAIT is 0x01400000 cycles (0.437 s at 48 MHz clk_sys), in a window
+# measured in MAME (the core's frames match MAME's from frame 18, MS1Z-10):
+#   - frames 2-3: the boot clears work RAM to zero;
+#   - frame 17 (ends 0.303 s): one loop writes the table, FF000 first, then
+#     FF002-FF07F. The top-score check byte (FF001 = 03) is in before the rest,
+#     so a check that runs while the loop does passes, and the loop then writes
+#     the defaults over the restore. MAME's plugin checks once a frame and never
+#     sees the loop half done; this module checks every CHECK_WAIT (~5 us), so
+#     the wait has to END after the loop;
+#   - frame 32/33 (from 0.552 s): the game copies the table, and the high-score
+#     screen's first showing draws that copy. A restore after it showed the
+#     default names until the attract came round (MS1Z-15).
+# 0.437 s sits ~7 frames inside each edge. The NMK16 and MS1BCD cores use
+# 0x0C000000 (~4 s) for a destructive boot RAM test (tdragon2's "WORK RAM CHECK
+# ERROR"); this board has none -- nothing touches the checked bytes before the
+# frame 17 loop.
+HDR = [0x01,0x40,0x00,0x00,  # START_WAIT
        0x00,0xFF,            # CHECK_WAIT
        0x00,0x02,            # CHECK_HOLD
        0x00,0x02,            # WRITE_HOLD

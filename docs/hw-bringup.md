@@ -81,3 +81,20 @@ mono), 70 s from 6 s into a game with no input: Alt+F1 at ~6.5 s, F1 at ~31.5 s.
 
 So the Z80 and YM2203 state is saved and restored, and the music plays on
 through a load without a dropout.
+
+## 2026-10-05 — high scores (v2026-10-05.2, MS1Z-14, MS1Z-15)
+
+`Arcade-JalecoMS1Z_20261005.rbf` md5 `faa25c76c664814ee5172081024c39ff`
+(19,500 ALMs, 252 / 553 M10K, timing met, worst slack +0.224 ns), replacing
+the earlier build of the same name, with both `.mra` files (START_WAIT
+0x01400000), each checked by md5. High Scores set through `lomakai.CFG`
+(status bit 39), the OSD opened with F12 to save.
+
+| test | v2026-10-05 | v2026-10-05.2 |
+|---|---|---|
+| fresh save | MAME's table | MAME's table |
+| names edited to `CLD` / `XYZ`, reload, save again | `C\0D`, `A\0I`, `X\0Z`: every high-lane byte 0 | `CLD`, `AKI`, `XYZ`, area bytes intact, three reloads in a row |
+| table's last byte 00 -> 50, reload | -- | kept; HUD shows `HI 30050` in the demo and in play |
+| first high-score screen after a reload | defaults | `CLD` / `XYZ` (21-27 s) |
+| savestate: Alt+F1 at 2:53, 21 s on (2:32), F1 | -- | 2:48 4 s after the load, 2:38 8 s later |
+| cheat Infinite Time | -- | holds 9:58 over 10 s; without it 4:00 to 3:49 |

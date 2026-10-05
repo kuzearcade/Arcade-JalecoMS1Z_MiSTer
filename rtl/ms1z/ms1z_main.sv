@@ -171,8 +171,16 @@ module ms1z_main (
 	end
 
 	// ------------------------------------------------------------ memories
-	reg [15:0] wram    [0:32767];  // CPU, savestate, back door
-	reg [15:0] wram_sp [0:1023];   // copy of Sprite Data (words 0x4000-0x43FF), read by the snapshot
+	// Work RAM and its Sprite Data copy are each TWO byte-wide arrays, high and
+	// low lane. The high-score and cheat back door writes ONE byte; written as
+	// wram[i][7:0] into a 16-bit array, Quartus 17 inferred the RAM with no
+	// byte enables (WIDTH_BYTEENA_A = 1), so the "byte" write stored the whole
+	// word and zeroed the other lane on hardware while simulation was correct
+	// (MS1Z-14, MS1BCD's MS1-63). Two 8-bit arrays have a write enable each.
+	reg  [7:0] wram_h  [0:32767];  // CPU, savestate, back door
+	reg  [7:0] wram_l  [0:32767];
+	reg  [7:0] wsp_h   [0:1023];   // copy of Sprite Data (words 0x4000-0x43FF), read by the snapshot
+	reg  [7:0] wsp_l   [0:1023];
 	reg [15:0] pal     [0:1023];   // true dual port: A = CPU/savestate, B = video
 	reg [15:0] obj     [0:4095];
 	reg [15:0] vr0     [0:8191];
@@ -210,30 +218,23 @@ module ms1z_main (
 	wire        wsp_ss  = (ss_addr[14:10] == 5'b10000);
 	wire        wsp_hs  = (hs_wi[14:10] == 5'b10000);
 
+	// Writes: the savestate engine, else the back door, else the CPU. The
+	// back door writes ONE byte -- the ram_w mirror belongs to the 68000's
+	// write path, and applying it here would corrupt the neighbouring byte.
+	// The CPU's byte writes already fill both lanes (ram_wdat).
+	wire        wr_ss   = ss_w & ss_wram;
+	wire        wr_hs   = ~ss_w & hs_access & hs_write;
+	wire        wr_cpu  = ~ss_w & ~hs_access & we & sel_ram;
+	wire        wram_wh = wr_ss | (wr_hs & ~hs_addr[0]) | wr_cpu;
+	wire        wram_wl = wr_ss | (wr_hs &  hs_addr[0]) | wr_cpu;
+	wire [14:0] wram_wa = ss_w ? ss_addr[14:0] : hs_access ? hs_wi : wram_i;
+	wire [15:0] wram_wd = ss_w ? ss_wdata : hs_access ? {hs_din, hs_din} : ram_wdat;
+	wire        wram_ws = ss_w ? wsp_ss : hs_access ? wsp_hs : wsp_cpu;
 	always @(posedge clk) begin
-		if (ss_w) begin
-			if (ss_wram) begin
-				wram[ss_addr[14:0]] <= ss_wdata;
-				if (wsp_ss) wram_sp[ss_addr[9:0]] <= ss_wdata;
-			end
-		end else if (hs_access) begin
-			// ONE byte: the ram_w mirror belongs to the 68000's write path,
-			// and applying it here would corrupt the neighbouring byte.
-			if (hs_write) begin
-				if (~hs_addr[0]) begin
-					wram[hs_wi][15:8] <= hs_din;
-					if (wsp_hs) wram_sp[hs_wi[9:0]][15:8] <= hs_din;
-				end else begin
-					wram[hs_wi][7:0] <= hs_din;
-					if (wsp_hs) wram_sp[hs_wi[9:0]][7:0] <= hs_din;
-				end
-			end
-		end else if (we) begin
-			if (sel_ram) begin
-				wram[wram_i] <= ram_wdat;
-				if (wsp_cpu) wram_sp[wram_i[9:0]] <= ram_wdat;
-			end
-		end
+		if (wram_wh) wram_h[wram_wa] <= wram_wd[15:8];
+		if (wram_wl) wram_l[wram_wa] <= wram_wd[7:0];
+		if (wram_wh & wram_ws) wsp_h[wram_wa[9:0]] <= wram_wd[15:8];
+		if (wram_wl & wram_ws) wsp_l[wram_wa[9:0]] <= wram_wd[7:0];
 	end
 
 	// Palette and Object RAM take byte writes the same way the VRAM does:
@@ -267,7 +268,7 @@ module ms1z_main (
 	// ---- read ports (registered; address muxed, never concurrent)
 	wire [14:0] wram_rd_i = ss_active ? ss_addr[14:0] : hs_access ? hs_wi : wram_i;
 	reg  [15:0] wram_q;
-	always @(posedge clk) wram_q <= wram[wram_rd_i];
+	always @(posedge clk) wram_q <= {wram_h[wram_rd_i], wram_l[wram_rd_i]};
 	reg hs_a0_q;
 	always @(posedge clk) hs_a0_q <= hs_addr[0];
 	assign hs_dout = hs_a0_q ? wram_q[7:0] : wram_q[15:8];
@@ -295,10 +296,10 @@ module ms1z_main (
 		v1_rd_data <= vr1[v1_rd_addr];
 	end
 
-	// ---- the live Sprite Data read port: wram_sp mirrors the 1 K words at
+	// ---- the live Sprite Data read port: wsp_h/wsp_l mirror the 1 K words at
 	// work RAM word 0x4000, written with every write to them, so the line
 	// renderer reads the list as it stands without a second work-RAM port.
-	always @(posedge clk) spr_rq <= wram_sp[spr_ra];
+	always @(posedge clk) spr_rq <= {wsp_h[spr_ra], wsp_l[spr_ra]};
 
 	// ---- video registers: shadows, byte-lane correct, restored by the image
 	reg [15:0] sh_scrf, sh_t0x, sh_t0y, sh_t0c, sh_t1x, sh_t1y, sh_t1c;

@@ -239,3 +239,65 @@ from the two measured taps that way: **-0.40 dB, band correlation 0.997,
 0 clipped samples**. In two louder seconds (43-45 s) the SSG ratio falls to
 0.57-0.62: a small difference in the volume curve at high levels, left as it
 is.
+
+## MS1Z-14 — High scores came back with every even byte zeroed (closed; MS1BCD's MS1-63)
+
+Measured on the board with the v2026-10-05 bitstream: High Scores on, the
+game's table saved as MAME's (`NMK 30000`, `AKI 20000`, ...); the first name
+changed to `CLD` and the third to `XYZ` in the `.nvm`, the core reloaded and
+the OSD opened to save again. The file came back `00 'C' 00 'D'`,
+`00 'A' 00 'I'`, `00 'X' 00 'Z'`: every byte at an even address -- the high
+lane -- was 0, the edited ones and the untouched ones alike, including the
+area byte in front of each name.
+
+Two of MS1BCD's three MS1-63 faults, carried in with the fork:
+
+1. **The back door's byte writes stored whole words.** `ms1z_main` wrote
+   `wram[i][15:8] <= hs_din` into 16-bit arrays, and Quartus 17 inferred them
+   with no byte enables (map report: `WIDTH_BYTEENA_A = 1`) -- the same silent
+   non-inference as MS1Z-6, this time on an array that does infer. Cheat
+   pokes use the same path and could clear their neighbour byte. Fix: work
+   RAM and its Sprite Data copy are each two 8-bit arrays (`wram_h`/`wram_l`,
+   `wsp_h`/`wsp_l`) with a write enable per lane. One more M10K (252/553).
+2. **The dump check.** `hiscore.v` discarded a file whose entries' first or
+   last byte differed from hiscore.dat's start/end values, which a real new
+   score changes. Removed: the file is MS1BCD's current `hiscore.v`.
+
+(MS1BCD's third fault, a capture buffer too small, does not apply: this table
+is 0x84 bytes and HS_SCOREWIDTH(8) holds 256.)
+
+On the board with the fixed bitstream: the save matches MAME's table; the
+`CLD`/`XYZ` edit is restored with no byte lost and the untouched `AKI` intact;
+a changed last byte (`00 03 00 00` -> `00 03 00 50`) is restored and kept,
+and the in-game HUD shows `HI 30050`. Savestate round trip and the Infinite
+Time cheat unchanged.
+
+## MS1Z-15 — The high-score screen's first showing drew the default names (closed)
+
+With MS1Z-14 fixed the restore landed, but the attract's first high-score
+screen still showed the defaults; the next one showed the restored names.
+MAME's own hiscore plugin, with the same file, shows them on the first.
+
+Measured in MAME (Lua write taps and pokes):
+
+- frames 2-3: the boot clears work RAM to zero (no pattern test);
+- frame 17 (ends 0.303 s): one loop writes the table, FF000 first, then
+  FF002-FF07F;
+- frame 32/33 (from 0.552 s): the game copies the table, and the screen's
+  first showing draws that copy -- a poke at frame 31 or earlier shows on it,
+  one at frame 33 does not.
+
+The hiscore header's START_WAIT was MS1BCD's `0x0C000000` (~4 s), long after
+the copy. Shortened to `0x00800000` (0.17 s) the restore was lost altogether:
+the module re-checks every CHECK_WAIT (~5 us), the top-score check byte
+(FF001 = 03) is written at the start of the frame-17 loop, and a check that
+passed mid-loop restored the scores just before the loop wrote the defaults
+over them (the saved file came back `NMK`). MAME's plugin checks once a frame
+and never sees the loop half done.
+
+Fix, in data (`tools/gen_hiscore_mra.py`, both `.mra`): START_WAIT
+`0x01400000`, 0.437 s at 48 MHz -- after the loop and before the copy, about
+seven frames from each edge. The core's frames match MAME's from frame 18
+(MS1Z-10). On the board: three reloads in a row keep `CLD`/`XYZ` and the
+changed last byte, and the first high-score screen (21-27 s after
+`load_core`) shows `CLD` and `XYZ`.
