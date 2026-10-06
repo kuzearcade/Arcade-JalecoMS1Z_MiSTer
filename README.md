@@ -30,7 +30,7 @@ where every file came from.
 - **audio:** FM within 0.04 dB of MAME, the mix within 0.4 dB, band
   correlation 0.997 (MS1Z-13);
 - **board:** boots to attract, savestates save and load, Flip screen exact,
-  cheats work (`docs/hw-bringup.md`); 19,511 / 41,910 ALMs, 252 / 553 M10K,
+  cheats work (`docs/hw-bringup.md`); 19,882 / 41,910 ALMs, 252 / 553 M10K,
   timing met.
 
 See `docs/PLAN.md` for the plan and its gates.

@@ -108,3 +108,11 @@ picture while the raster is held (MS1Z-16). With direct video on, Legend of
 Makai's signal appears 5.5 s after the load, as on the release (its 1.35 s
 download is inside the capture card's locking time); over HDMI it boots and
 plays as before, the menu's "Sending" screen on black.
+
+## 2026-10-06 — DDR3 ROM loading (v2026-10-06.1, MS1Z-17)
+
+`Arcade-JalecoMS1Z_20261006.rbf` md5 `9e3d7a76af3c29ce0b92e4dec550e432`
+(19,882 ALMs, 252 / 553 M10K, timing met: setup +0.558 ns, hold +0.247 ns),
+replacing the earlier build of the same name; both `.mra` files carry
+`address="0x30000000"`. Legend of Makai's game runs 0.9 s sooner after the
+load than on v2026-10-06; the old `.mra` (no `address=`) loads as before.

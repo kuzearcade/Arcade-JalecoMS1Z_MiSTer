@@ -29,7 +29,7 @@
 
   <buttons names="Attack,Jump,-,Start,Coin" default="A,B,-,Start,R"/>
 
-  <rom index="0" zip="makaiden.zip|lomakai.zip" md5="none">
+  <rom index="0" zip="makaiden.zip|lomakai.zip" md5="none" address="0x30000000">
     <!-- maincpu 0x040000 @ 0x000000 -->
     <interleave output="16">
       <part crc="87cf81d1" name="makaiden.3a" map="01"/>

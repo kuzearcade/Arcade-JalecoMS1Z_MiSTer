@@ -139,7 +139,7 @@ def mra(setname):
 {switches_xml(setname, 0x00)}
   <buttons names="{BUTTONS}" default="{BUTTON_DEFAULTS}"/>
 
-  <rom index="0" zip="{zip_attr(setname)}" md5="none">
+  <rom index="0" zip="{zip_attr(setname)}" md5="none" address="0x30000000">
 {parts_xml(setname)}  </rom>
 
   <!-- The board's two 256-byte PROMs (makaiden.9 / .10). MAME does not use
