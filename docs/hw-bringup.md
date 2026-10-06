@@ -98,3 +98,13 @@ the earlier build of the same name, with both `.mra` files (START_WAIT
 | first high-score screen after a reload | defaults | `CLD` / `XYZ` (21-27 s) |
 | savestate: Alt+F1 at 2:53, 21 s on (2:32), F1 | -- | 2:48 4 s after the load, 2:38 8 s later |
 | cheat Infinite Time | -- | holds 9:58 over 10 s; without it 4:00 to 3:49 |
+
+## 2026-10-06 — sync while the ROM loads (v2026-10-06, MS1Z-16)
+
+`Arcade-JalecoMS1Z_20261006.rbf` md5 `4ff7f1c6bd9a5a41ad7bf962a0d95255`
+(19,511 ALMs, 252 / 553 M10K, timing met: setup +0.697 ns, hold +0.185 ns).
+`video_retime` gives sync from the moment the core is loaded and a black
+picture while the raster is held (MS1Z-16). With direct video on, Legend of
+Makai's signal appears 5.5 s after the load, as on the release (its 1.35 s
+download is inside the capture card's locking time); over HDMI it boots and
+plays as before, the menu's "Sending" screen on black.

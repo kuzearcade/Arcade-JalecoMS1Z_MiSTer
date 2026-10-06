@@ -28,7 +28,8 @@ Arcade-SandScrp_MiSTer `b09d359`.
 | `MS1Z.sv` | MS1BCD `MS1BCD.sv` | derived; the hps_io/reset, hiscore/cheat/savestate and video-chain blocks are spliced verbatim |
 | `rtl/cheats.sv` | MS1BCD | forked: `ACTS` 3, masked-byte action kind, `ram_dout` input |
 | `rtl/savestate/*.sv` | MS1BCD (`ss_z80_park.sv` originally NMK16) | verbatim |
-| `rtl/sdram*.sv`, `rtl/rom_cache*.sv`, `rtl/tile_prefetch_byte.sv`, `rtl/video_retime.sv`, `rtl/crt_chain.sv`, `rtl/pll*.v` | MS1BCD | verbatim |
+| `rtl/sdram*.sv`, `rtl/rom_cache*.sv`, `rtl/tile_prefetch_byte.sv`, `rtl/crt_chain.sv`, `rtl/pll*.v` | MS1BCD | verbatim |
+| `rtl/video_retime.sv` | MS1BCD | changed here (MS1Z-16, marked MODIFIED, as MS1BCD's MS1-66): the read side runs from configuration, black while the raster is stopped |
 | `rtl/third_party/{fx68k,hiscore,crt_adjust}` | MS1BCD (tracked, modified hiscore and crt_vsize) | verbatim |
 | `rtl/third_party/{jt12,t80}`, `rtl/third_party_gen/t80/` | SandScrp (same pins as NMK16) | verbatim |
 | `sys/` | MS1BCD | verbatim |
