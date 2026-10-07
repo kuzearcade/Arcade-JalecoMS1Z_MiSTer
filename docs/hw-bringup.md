@@ -116,3 +116,11 @@ plays as before, the menu's "Sending" screen on black.
 replacing the earlier build of the same name; both `.mra` files carry
 `address="0x30000000"`. Legend of Makai's game runs 0.9 s sooner after the
 load than on v2026-10-06; the old `.mra` (no `address=`) loads as before.
+
+## 2026-10-07 — the sync kept through a reset (v2026-10-07, MS1Z-18)
+
+`Arcade-JalecoMS1Z_20261007.rbf` md5 `35b8d47eb92603e99db74c0655487334`
+(19,873 ALMs, 252 / 553 M10K, timing met: setup +0.440 ns, hold +0.246 ns).
+The reset ends where `video_retime` asks, so the raster restarts in phase with
+the sync: with direct video on, an OSD Reset no longer makes the capture card
+lose the picture (it did on v2026-10-06.1). HDMI is as before.
